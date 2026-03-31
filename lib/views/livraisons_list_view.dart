@@ -19,6 +19,7 @@ class LivraisonsListView extends ConsumerWidget {
       body: Column(
         children: [
           _KpiRow(state: state),
+          _FiltreChips(state: state, vm: vm),
           const SizedBox(height: 4),
           Expanded(child: _buildListeOuVide(context, ref, state, vm)),
         ],
@@ -39,10 +40,10 @@ class LivraisonsListView extends ConsumerWidget {
   //AppBar
 
   AppBar _buildAppBar(
-    BuildContext context,
-    LivraisonsState state,
-    LivraisonsViewModel vm,
-  ) {
+      BuildContext context,
+      LivraisonsState state,
+      LivraisonsViewModel vm,
+      ) {
     return AppBar(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,17 +58,35 @@ class LivraisonsListView extends ConsumerWidget {
           ),
         ],
       ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(52),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: TextField(
+            onChanged: vm.setRecherche,
+            style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              hintText: 'Rechercher un client, une adresse...',
+              prefixIcon: Icon(Icons.search, color: AppColors.textMuted, size: 20),
+              isDense: true,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   //Liste
 
   Widget _buildListeOuVide(
-    BuildContext context,
-    WidgetRef ref,
-    LivraisonsState state,
-    LivraisonsViewModel vm,
-  ) {
+      BuildContext context,
+      WidgetRef ref,
+      LivraisonsState state,
+      LivraisonsViewModel vm,
+      ) {
     final liste = state.livraisonsFiltrees;
 
     if (liste.isEmpty) {
@@ -199,6 +218,64 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
+//Filtre Chips
+
+class _FiltreChips extends StatelessWidget {
+  final LivraisonsState state;
+  final LivraisonsViewModel vm;
+  const _FiltreChips({required this.state, required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final filtres = <StatutLivraison?>[
+      null, // Tous
+      StatutLivraison.enAttente,
+      StatutLivraison.enCours,
+      StatutLivraison.livree,
+      StatutLivraison.annulee,
+    ];
+
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: filtres.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final f = filtres[i];
+          final selected = state.filtreStatut == f;
+          final color = f == null ? AppColors.coral : statutColor(f);
+          final label = f == null ? 'Tous' : f.label;
+
+          return GestureDetector(
+            onTap: () => vm.setFiltreStatut(f),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: selected ? color : AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected ? color : color.withOpacity(0.2),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected ? Colors.white : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 //État vide
 

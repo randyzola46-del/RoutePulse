@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:route_pulse/views/livraisons_list_view.dart';
 import 'theme/app_theme.dart';
+import 'views/livraisons_list_view.dart';
 
 void main() {
   runApp(

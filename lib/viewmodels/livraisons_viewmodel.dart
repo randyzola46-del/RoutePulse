@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/livraison.dart';
 
-//State
+// ─── State ───────────────────────────────────────────────────────────────────
 
 class LivraisonsState {
   final List<Livraison> livraisons;
@@ -111,7 +111,6 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
   }
 
   //CREATE
-
   void ajouterLivraison({
     required String nomClient,
     required String adresse,
@@ -160,6 +159,16 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
     state = state.copyWith(
       livraisons: state.livraisons.where((l) => l.id != id).toList(),
     );
+  }
+
+  //FILTRES / RECHERCHE
+
+  void setFiltreStatut(StatutLivraison? statut) {
+    state = state.copyWith(filtreStatut: () => statut);
+  }
+
+  void setRecherche(String query) {
+    state = state.copyWith(recherche: query);
   }
 }
 
