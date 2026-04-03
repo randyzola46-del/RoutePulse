@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'theme/app_theme.dart';
-import 'views/livraisons_list_view.dart';
+import 'views/dashboard_view.dart';
+import 'views/main_scaffold.dart';
 
 void main() {
   runApp(
@@ -20,7 +21,7 @@ class RoutePulseApp extends StatelessWidget {
       title: 'RoutePulse',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const LivraisonsListView(),
+      home: const MainScaffold(),
     );
   }
 }

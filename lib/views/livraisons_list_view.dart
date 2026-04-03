@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/livraison.dart';
-import '../../viewmodels/livraisons_viewmodel.dart';
-import '../../widgets/livraison_card.dart';
-import '../../widgets/livraison_form_sheet.dart' hide statutColor;
-import '../../theme/app_theme.dart';
+import '../models/livraison.dart';
+import '../viewmodels/livraisons_viewmodel.dart';
+import '../widgets/livraison_card.dart';
+import '../widgets/livraison_form_sheet.dart' hide statutColor;
+import '../theme/app_theme.dart';
 
 class LivraisonsListView extends ConsumerWidget {
   const LivraisonsListView({super.key});
