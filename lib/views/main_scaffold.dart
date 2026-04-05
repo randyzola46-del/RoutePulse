@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_view.dart';
 import 'livraisons_list_view.dart';
+import 'gestion_view.dart';
 
-//Scaffold racine de l'application avec navigation par onglets.
+// Scaffold racine de l'application avec navigation par onglets.
 class MainScaffold extends ConsumerStatefulWidget {
   const MainScaffold({super.key});
 
@@ -29,7 +30,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
           const LivraisonsListView(),
           const _PlaceholderPage('Carte'),
           const _PlaceholderPage('Stats'),
-          const _PlaceholderPage('Profil'),
+          const GestionView(),
         ],
       ),
       bottomNavigationBar: _AppNavBar(
@@ -40,9 +41,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
   }
 }
 
-//Widgets privés
-
-/// Barre de navigation principale de l'application.
+// Barre de navigation principale de l'application.
 class _AppNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -146,7 +145,7 @@ class _ActiveNavIcon extends StatelessWidget {
   }
 }
 
-//Icône inactive sur fond sombre avec coins arrondis contextuels.
+// Icône inactive sur fond sombre avec coins arrondis contextuels.
 class _InactiveNavIcon extends StatelessWidget {
   final IconData icon;
   final bool isLeftAdjacent;
@@ -175,7 +174,7 @@ class _InactiveNavIcon extends StatelessWidget {
   }
 }
 
-//Page placeholder pour les onglets non encore implémentés.
+// Page placeholder pour les onglets non encore implémentés.
 class _PlaceholderPage extends StatelessWidget {
   final String label;
   const _PlaceholderPage(this.label, {super.key});
