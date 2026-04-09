@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/livraison.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
 import '../theme/app_theme.dart';
+import 'time_range_picker.dart';
 
 class LivraisonFormSheet extends ConsumerStatefulWidget {
-  final Livraison? livraison; // null = création, non-null = édition
+  final Livraison? livraison;
 
   const LivraisonFormSheet({super.key, this.livraison});
 
@@ -18,7 +19,7 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
 
   late final TextEditingController _nomCtrl;
   late final TextEditingController _adresseCtrl;
-  late final TextEditingController _creneauCtrl;
+  late String _creneauValue;
   late final TextEditingController _colisCtrl;
   late final TextEditingController _poidsCtrl;
   late final TextEditingController _notesCtrl;
@@ -30,20 +31,19 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
   void initState() {
     super.initState();
     final l = widget.livraison;
-    _nomCtrl     = TextEditingController(text: l?.nomClient ?? '');
+    _nomCtrl = TextEditingController(text: l?.nomClient ?? '');
     _adresseCtrl = TextEditingController(text: l?.adresse ?? '');
-    _creneauCtrl = TextEditingController(text: l?.creneau ?? '');
-    _colisCtrl   = TextEditingController(text: l?.nbColis.toString() ?? '1');
-    _poidsCtrl   = TextEditingController(text: l?.poids.toString() ?? '');
-    _notesCtrl   = TextEditingController(text: l?.notes ?? '');
-    _statut      = l?.statut ?? StatutLivraison.enAttente;
+    _creneauValue = l?.creneau ?? '09:00 - 12:00';
+    _colisCtrl = TextEditingController(text: l?.nbColis.toString() ?? '1');
+    _poidsCtrl = TextEditingController(text: l?.poids.toString() ?? '');
+    _notesCtrl = TextEditingController(text: l?.notes ?? '');
+    _statut = l?.statut ?? StatutLivraison.enAttente;
   }
 
   @override
   void dispose() {
     _nomCtrl.dispose();
     _adresseCtrl.dispose();
-    _creneauCtrl.dispose();
     _colisCtrl.dispose();
     _poidsCtrl.dispose();
     _notesCtrl.dispose();
@@ -52,33 +52,27 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
-
     final vm = ref.read(livraisonsViewModelProvider.notifier);
-
     if (_isEdit) {
       vm.modifierLivraison(
         widget.livraison!.copyWith(
           nomClient: _nomCtrl.text.trim(),
-          adresse:   _adresseCtrl.text.trim(),
-          creneau:   _creneauCtrl.text.trim(),
-          nbColis:   int.tryParse(_colisCtrl.text) ?? 1,
-          poids:     double.tryParse(_poidsCtrl.text) ?? 0,
-          statut:    _statut,
-          notes:     _notesCtrl.text.trim().isEmpty
-              ? null
-              : _notesCtrl.text.trim(),
+          adresse: _adresseCtrl.text.trim(),
+          creneau: _creneauValue,
+          nbColis: int.tryParse(_colisCtrl.text) ?? 1,
+          poids: double.tryParse(_poidsCtrl.text) ?? 0,
+          statut: _statut,
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
         ),
       );
     } else {
       vm.ajouterLivraison(
         nomClient: _nomCtrl.text.trim(),
-        adresse:   _adresseCtrl.text.trim(),
-        creneau:   _creneauCtrl.text.trim(),
-        nbColis:   int.tryParse(_colisCtrl.text) ?? 1,
-        poids:     double.tryParse(_poidsCtrl.text) ?? 0,
-        notes:     _notesCtrl.text.trim().isEmpty
-            ? null
-            : _notesCtrl.text.trim(),
+        adresse: _adresseCtrl.text.trim(),
+        creneau: _creneauValue,
+        nbColis: int.tryParse(_colisCtrl.text) ?? 1,
+        poids: double.tryParse(_poidsCtrl.text) ?? 0,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
     }
     Navigator.pop(context);
@@ -102,7 +96,6 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle
               Center(
                 child: Container(
                   width: 36, height: 4,
@@ -113,7 +106,6 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                   ),
                 ),
               ),
-              // Titre
               Text(
                 _isEdit ? 'Modifier la livraison' : 'Nouvelle livraison',
                 style: const TextStyle(
@@ -128,26 +120,22 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                 controller: _nomCtrl,
                 label: 'Nom du client',
                 icon: Icons.person_outline,
-                validator: (v) =>
-                    v!.trim().isEmpty ? 'Champ obligatoire' : null,
+                validator: (v) => v!.trim().isEmpty ? 'Champ obligatoire' : null,
               ),
               const SizedBox(height: 12),
+
               _buildField(
                 controller: _adresseCtrl,
                 label: 'Adresse de livraison',
                 icon: Icons.location_on_outlined,
-                validator: (v) =>
-                    v!.trim().isEmpty ? 'Champ obligatoire' : null,
+                validator: (v) => v!.trim().isEmpty ? 'Champ obligatoire' : null,
               ),
               const SizedBox(height: 12),
-              _buildField(
-                controller: _creneauCtrl,
-                label: 'Créneau horaire (ex: 14h – 16h)',
-                icon: Icons.schedule_outlined,
-                validator: (v) =>
-                    v!.trim().isEmpty ? 'Champ obligatoire' : null,
-              ),
+
+              // ✅ Nouveau : Sélecteur de créneau horaire
+              _buildCreneauField(),
               const SizedBox(height: 12),
+
               Row(
                 children: [
                   Expanded(
@@ -156,8 +144,7 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                       label: 'Nb colis',
                       icon: Icons.inventory_2_outlined,
                       keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          int.tryParse(v ?? '') == null ? 'Invalide' : null,
+                      validator: (v) => int.tryParse(v ?? '') == null ? 'Invalide' : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -166,17 +153,29 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                       controller: _poidsCtrl,
                       label: 'Poids (kg)',
                       icon: Icons.scale_outlined,
-                      keyboardType: TextInputType.number,
-                      validator: (v) =>
-                          double.tryParse(v ?? '') == null ? 'Invalide' : null,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) => double.tryParse(v ?? '') == null ? 'Invalide' : null,
                     ),
                   ),
                 ],
               ),
 
-              // Statut (seulement en édition)
+              // Sélection véhicule
+              const SizedBox(height: 20),
+              const Text(
+                'VÉHICULE',
+                style: TextStyle(
+                  color: AppColors.coral,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Statut (édition seulement)
               if (_isEdit) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 const Text(
                   'STATUT',
                   style: TextStyle(
@@ -204,9 +203,7 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                         fontSize: 11,
                       ),
                       side: BorderSide(
-                        color: selected
-                            ? color.withOpacity(0.5)
-                            : Colors.transparent,
+                        color: selected ? color.withOpacity(0.5) : Colors.transparent,
                       ),
                     );
                   }).toList(),
@@ -232,6 +229,52 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
     );
   }
 
+  //widget pour le créneau horaire
+  Widget _buildCreneauField() {
+    // Extraire les heures de début et fin depuis _creneauValue
+    String startTime = '09:00';
+    String endTime = '12:00';
+
+    try {
+      final parts = _creneauValue.split(' - ');
+      if (parts.length == 2) {
+        startTime = parts[0];
+        endTime = parts[1];
+      }
+    } catch (_) {}
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.schedule_outlined, size: 18, color: AppColors.textMuted),
+            const SizedBox(width: 8),
+            const Text(
+              'Créneau horaire',
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Nunito',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TimeRangePicker(
+          initialStartTime: startTime,
+          initialEndTime: endTime,
+          onTimeRangeSelected: (timeRange) {
+            setState(() {
+              _creneauValue = timeRange;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _buildField({
     required TextEditingController controller,
     required String label,
@@ -246,28 +289,14 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w600),
+        color: AppColors.textPrimary,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.textMuted, size: 18),
       ),
     );
-  }
-}
-
-Color statutColor(StatutLivraison s) {
-  switch (s) {
-    case StatutLivraison.enAttente:
-      return AppColors.statusAttente;
-    case StatutLivraison.enCours:
-      return AppColors.statusCours;
-    case StatutLivraison.livree:
-      return AppColors.statusLivree;
-    case StatutLivraison.aReporter:
-      return AppColors.statusReporter;
-    case StatutLivraison.annulee:
-      return AppColors.statusAnnulee;
   }
 }

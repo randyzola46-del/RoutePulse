@@ -5,32 +5,35 @@ import '../theme/app_theme.dart';
 class VehiculeCard extends StatelessWidget {
   final Vehicule vehicule;
   final VoidCallback onTap;
+  final ValueChanged<bool>? onToggleActif;
 
   const VehiculeCard({
     super.key,
     required this.vehicule,
     required this.onTap,
+    this.onToggleActif,
   });
 
-  bool get _disponible =>
+  bool get _actif =>
       vehicule.disponibilite == DisponibiliteVehicule.disponible;
 
   Color get _accentColor =>
-      _disponible ? AppColors.statusAttente : AppColors.textMuted;
+      _actif ? AppColors.statusLivree : AppColors.textMuted;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: _actif ? AppColors.surface : AppColors.surface.withOpacity(0.6),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: _disponible
+            color: _actif
                 ? AppColors.statusAttente.withOpacity(0.25)
-                : Colors.white.withOpacity(0.06),
+                : Colors.white.withOpacity(0.04),
             width: 1,
           ),
         ),
@@ -40,8 +43,8 @@ class VehiculeCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Bande latérale colorée
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
                   width: 4,
                   color: _accentColor,
                 ),
@@ -52,8 +55,10 @@ class VehiculeCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildHeader(context),
-                        const SizedBox(height: 12),
-                        _buildJauges(),
+                        if (_actif) ...[
+                          const SizedBox(height: 12),
+                          _buildJauges(),
+                        ],
                       ],
                     ),
                   ),
@@ -69,8 +74,8 @@ class VehiculeCard extends StatelessWidget {
   Widget _buildHeader(BuildContext context) {
     return Row(
       children: [
-        // Icône véhicule
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
           width: 48,
           height: 48,
           decoration: BoxDecoration(
@@ -85,19 +90,19 @@ class VehiculeCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        // Nom + immat
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                vehicule.nomComplet,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  color: _actif ? AppColors.textPrimary : AppColors.textMuted,
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Nunito',
                 ),
+                child: Text(vehicule.nomComplet),
               ),
               const SizedBox(height: 3),
               Container(
@@ -121,8 +126,10 @@ class VehiculeCard extends StatelessWidget {
             ],
           ),
         ),
-        // Badge disponibilité
-        _DisponibiliteBadge(disponible: _disponible),
+        _ToggleActif(
+          actif: _actif,
+          onChanged: onToggleActif,
+        ),
       ],
     );
   }
@@ -135,7 +142,7 @@ class VehiculeCard extends StatelessWidget {
             label: 'Charge',
             valeur: '${vehicule.chargeMaxKg} Kg',
             ratio: vehicule.chargeMaxKg / 2000,
-            couleur: _disponible ? AppColors.statusAttente : AppColors.textMuted,
+            couleur: AppColors.statusAttente,
           ),
         ),
         const SizedBox(width: 10),
@@ -144,7 +151,7 @@ class VehiculeCard extends StatelessWidget {
             label: 'Volume',
             valeur: '${vehicule.volumeM3.toStringAsFixed(0)} m³',
             ratio: vehicule.volumeM3 / 16,
-            couleur: _disponible ? AppColors.coral : AppColors.textMuted,
+            couleur: AppColors.coral,
           ),
         ),
       ],
@@ -152,32 +159,75 @@ class VehiculeCard extends StatelessWidget {
   }
 }
 
-//Badge Disponible / Indisponible
+//Toggle Actif / Inactif
 
-class _DisponibiliteBadge extends StatelessWidget {
-  final bool disponible;
-  const _DisponibiliteBadge({required this.disponible});
+class _ToggleActif extends StatelessWidget {
+  final bool actif;
+  final ValueChanged<bool>? onChanged;
+
+  const _ToggleActif({required this.actif, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final color = disponible ? AppColors.statusLivree : AppColors.statusAnnulee;
-    final label = disponible ? 'Disponible' : 'Indisponible';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          fontFamily: 'Nunito',
-        ),
+    return GestureDetector(
+      onTap: () => onChanged?.call(!actif),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              color: actif ? AppColors.statusLivree : AppColors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Nunito',
+              letterSpacing: 0.4,
+            ),
+            child: Text(actif ? 'ACTIF' : 'INACTIF'),
+          ),
+          const SizedBox(height: 5),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 44,
+            height: 24,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: actif
+                  ? AppColors.statusLivree.withOpacity(0.25)
+                  : Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: actif
+                    ? AppColors.statusLivree.withOpacity(0.5)
+                    : Colors.white.withOpacity(0.12),
+                width: 1,
+              ),
+            ),
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              alignment:
+                  actif ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: actif ? AppColors.statusLivree : AppColors.textMuted,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (actif ? AppColors.statusLivree : Colors.black)
+                          .withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -223,21 +273,12 @@ class _JaugeCell extends StatelessWidget {
             valeur,
             style: TextStyle(
               color: couleur,
-              fontSize: 16,
+              fontSize: 20,
               fontWeight: FontWeight.w900,
               fontFamily: 'Nunito',
             ),
           ),
           const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: ratio.clamp(0.0, 1.0),
-              minHeight: 4,
-              backgroundColor: Colors.white.withOpacity(0.08),
-              valueColor: AlwaysStoppedAnimation<Color>(couleur),
-            ),
-          ),
         ],
       ),
     );

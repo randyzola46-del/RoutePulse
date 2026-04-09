@@ -10,6 +10,7 @@ import '../widgets/vehicule_card.dart';
 import '../widgets/client_row.dart';
 import 'vehicule_detail_view.dart';
 import 'client_detail_view.dart';
+import 'vehicule_form_view.dart';
 
 class GestionView extends ConsumerStatefulWidget {
   const GestionView({super.key});
@@ -174,7 +175,10 @@ class _VehiculesTab extends ConsumerWidget {
       children: [
         _VehiculesHeader(
           count: state.vehicules.length,
-          onAjouter: () {/* TODO */},
+          onAjouter: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const VehiculeFormView()),
+          ),
         ),
         _SearchBar(
           hintText: 'Rechercher un véhicule...',
@@ -204,6 +208,12 @@ class _VehiculesTab extends ConsumerWidget {
                   MaterialPageRoute(
                     builder: (_) => VehiculeDetailView(vehicule: v),
                   ),
+                ),
+                onToggleActif: (actif) => vm.changerDisponibilite(
+                  v.id,
+                  actif
+                      ? DisponibiliteVehicule.disponible
+                      : DisponibiliteVehicule.indisponible,
                 ),
               );
             },

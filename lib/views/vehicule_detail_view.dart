@@ -242,10 +242,99 @@ class _VehiculeDetailViewState extends State<VehiculeDetailView>
   }
 
   Widget _buildMissionsTab() {
-    return Center(
-      child: Text(
-        'Missions à venir',
-        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+    final missions = widget.vehicule.dernieresMissions;
+
+    if (missions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.route_rounded, color: AppColors.textMuted.withOpacity(0.3), size: 56),
+            const SizedBox(height: 12),
+            const Text(
+              'Aucune mission enregistrée',
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 15,
+                fontFamily: 'Nunito',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // KPIs missions
+    final totalKm = missions.fold<double>(0, (sum, m) => sum + m.km);
+    final kmMoyen = missions.isNotEmpty ? totalKm / missions.length : 0.0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Résumé stats missions
+          Row(
+            children: [
+              Expanded(
+                child: _StatCell(
+                  value: '${missions.length}',
+                  label: 'Missions',
+                  color: AppColors.statusAttente,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCell(
+                  value: '${totalKm.toStringAsFixed(0)} km',
+                  label: 'Total parcouru',
+                  color: AppColors.statusCours,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatCell(
+                  value: '${kmMoyen.toStringAsFixed(0)} km',
+                  label: 'Km moyen/mission',
+                  color: AppColors.statusLivree,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Titre liste
+          const Text(
+            'Historique des missions',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'Nunito',
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Liste détaillée des missions
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Column(
+              children: List.generate(missions.length, (i) {
+                final m = missions[i];
+                final isLast = i == missions.length - 1;
+                return _MissionDetailRow(
+                  mission: m,
+                  index: i + 1,
+                  isLast: isLast,
+                );
+              }),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -447,6 +536,112 @@ class _MissionRow extends StatelessWidget {
               fontSize: 16,
               fontWeight: FontWeight.w700,
               fontFamily: 'Nunito',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Ligne de mission détaillée (onglet Missions)
+class _MissionDetailRow extends StatelessWidget {
+  final MissionVehicule mission;
+  final int index;
+  final bool isLast;
+  const _MissionDetailRow({
+    required this.mission,
+    required this.index,
+    required this.isLast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Numéro de mission
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.coral.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '$index',
+                style: const TextStyle(
+                  color: AppColors.coral,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Nunito',
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mission.chauffeur,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Nunito',
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_rounded,
+                      color: AppColors.textMuted,
+                      size: 11,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      mission.date,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontFamily: 'Nunito',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Badge km
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.statusAttente.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: AppColors.statusAttente.withOpacity(0.25),
+              ),
+            ),
+            child: Text(
+              '${mission.km.toStringAsFixed(0)} km',
+              style: const TextStyle(
+                color: AppColors.statusAttente,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Nunito',
+              ),
             ),
           ),
         ],

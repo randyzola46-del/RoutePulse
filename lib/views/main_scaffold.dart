@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import 'dashboard_view.dart';
 import 'livraisons_list_view.dart';
 import 'gestion_view.dart';
+import 'stats_view.dart';
 
 // Scaffold racine de l'application avec navigation par onglets.
 class MainScaffold extends ConsumerStatefulWidget {
@@ -29,7 +30,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
           DashboardView(onVoirTout: () => _navigateTo(1)),
           const LivraisonsListView(),
           const _PlaceholderPage('Carte'),
-          const _PlaceholderPage('Stats'),
+          const StatsView(),
           const GestionView(),
         ],
       ),

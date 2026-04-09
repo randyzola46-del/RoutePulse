@@ -56,11 +56,23 @@ class VehiculesViewModel extends StateNotifier<VehiculesState> {
       state = state.copyWith(filtreDisponibilite: f);
 
   void changerDisponibilite(String id, DisponibiliteVehicule dispo) {
-    state = state.copyWith(
-      vehicules: state.vehicules.map((v) =>
+    if (dispo == DisponibiliteVehicule.disponible) {
+      state = state.copyWith(
+        vehicules: state.vehicules.map((v) {
+          if (v.id == id) {
+            return v.copyWith(disponibilite: DisponibiliteVehicule.disponible);
+          } else {
+            return v.copyWith(disponibilite: DisponibiliteVehicule.indisponible);
+          }
+        }).toList(),
+      );
+    } else {
+      state = state.copyWith(
+        vehicules: state.vehicules.map((v) =>
         v.id == id ? v.copyWith(disponibilite: dispo) : v,
-      ).toList(),
-    );
+        ).toList(),
+      );
+    }
   }
 
   void ajouterVehicule({
@@ -157,7 +169,7 @@ final _mockVehicules = <Vehicule>[
     chargeMaxKg: 800,
     volumeM3: 4,
     annee: 2019,
-    disponibilite: DisponibiliteVehicule.disponible,
+    disponibilite: DisponibiliteVehicule.indisponible,
     livraisonsTotal: 632,
     livraisonsMoisEnCours: 5,
     kmParcourus: 28000,

@@ -92,7 +92,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
         creneau: '10h – 12h',
         nbColis: 2,
         poids: 7.8,
-        statut: StatutLivraison.livree,
+        statut: StatutLivraison.enCours,
         dateCreation: DateTime.now(),
       ),
       Livraison(
@@ -102,7 +102,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
         creneau: '09h – 11h',
         nbColis: 5,
         poids: 22.0,
-        statut: StatutLivraison.annulee,
+        statut: StatutLivraison.enCours,
         notes: 'Client absent',
         dateCreation: DateTime.now(),
       ),
@@ -118,6 +118,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
     required int nbColis,
     required double poids,
     String? notes,
+    String? vehiculeId,
   }) {
     final nouvelle = Livraison(
       id: _uuid.v4(),
@@ -129,6 +130,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
       statut: StatutLivraison.enAttente,
       notes: notes,
       dateCreation: DateTime.now(),
+      vehiculeId: vehiculeId,
     );
     state = state.copyWith(
       livraisons: [...state.livraisons, nouvelle],

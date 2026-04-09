@@ -139,7 +139,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Bouton pleine largeur pour créer une nouvelle livraison.
+//Bouton pleine largeur pour créer une nouvelle livraison.
 class _NewDeliveryButton extends StatelessWidget {
   final VoidCallback onPressed;
   const _NewDeliveryButton({required this.onPressed});
