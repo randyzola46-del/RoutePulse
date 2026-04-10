@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import '../models/livraison.dart';
 import '../theme/app_theme.dart';
+import '../views/stats_view.dart';
 
 class LivraisonCard extends StatelessWidget {
   final Livraison livraison;

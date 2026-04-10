@@ -1,14 +1,34 @@
+// lib/views/livraison_form_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/livraison.dart';
+import '../models/client.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
 import '../theme/app_theme.dart';
 import 'time_range_picker.dart';
 
+// ✅ Classe pour le pré-remplissage depuis un client
+class ClientPrefill {
+  final String nom;
+  final String adresse;
+  final String creneauPrefere;
+
+  const ClientPrefill({
+    required this.nom,
+    required this.adresse,
+    required this.creneauPrefere,
+  });
+}
+
 class LivraisonFormSheet extends ConsumerStatefulWidget {
   final Livraison? livraison;
+  final ClientPrefill? prefillClient;
 
-  const LivraisonFormSheet({super.key, this.livraison});
+  const LivraisonFormSheet({
+    super.key,
+    this.livraison,
+    this.prefillClient,
+  });
 
   @override
   ConsumerState<LivraisonFormSheet> createState() => _LivraisonFormSheetState();
@@ -26,14 +46,18 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
   late StatutLivraison _statut;
 
   bool get _isEdit => widget.livraison != null;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
     final l = widget.livraison;
-    _nomCtrl = TextEditingController(text: l?.nomClient ?? '');
-    _adresseCtrl = TextEditingController(text: l?.adresse ?? '');
-    _creneauValue = l?.creneau ?? '09:00 - 12:00';
+    final prefill = widget.prefillClient;
+
+    _nomCtrl = TextEditingController(text: l?.nomClient ?? prefill?.nom ?? '');
+    _adresseCtrl = TextEditingController(
+        text: l?.adresse ?? prefill?.adresse ?? '');
+    _creneauValue = l?.creneau ?? prefill?.creneauPrefere ?? '09:00 - 12:00';
     _colisCtrl = TextEditingController(text: l?.nbColis.toString() ?? '1');
     _poidsCtrl = TextEditingController(text: l?.poids.toString() ?? '');
     _notesCtrl = TextEditingController(text: l?.notes ?? '');
@@ -50,43 +74,78 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
+
     final vm = ref.read(livraisonsViewModelProvider.notifier);
-    if (_isEdit) {
-      vm.modifierLivraison(
-        widget.livraison!.copyWith(
+
+    try {
+      if (_isEdit) {
+        await vm.modifierLivraison(
+          widget.livraison!.copyWith(
+            nomClient: _nomCtrl.text.trim(),
+            adresse: _adresseCtrl.text.trim(),
+            creneau: _creneauValue,
+            nbColis: int.tryParse(_colisCtrl.text) ?? 1,
+            poids: double.tryParse(_poidsCtrl.text) ?? 0,
+            statut: _statut,
+            notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          ),
+        );
+      } else {
+        await vm.ajouterLivraison(
           nomClient: _nomCtrl.text.trim(),
           adresse: _adresseCtrl.text.trim(),
           creneau: _creneauValue,
           nbColis: int.tryParse(_colisCtrl.text) ?? 1,
           poids: double.tryParse(_poidsCtrl.text) ?? 0,
-          statut: _statut,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        ),
-      );
-    } else {
-      vm.ajouterLivraison(
-        nomClient: _nomCtrl.text.trim(),
-        adresse: _adresseCtrl.text.trim(),
-        creneau: _creneauValue,
-        nbColis: int.tryParse(_colisCtrl.text) ?? 1,
-        poids: double.tryParse(_poidsCtrl.text) ?? 0,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEdit ? 'Livraison modifiée' : 'Livraison créée'),
+            backgroundColor: AppColors.statusLivree,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: AppColors.statusAnnulee,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isGlobalSubmitting = ref.watch(livraisonsViewModelProvider).isSubmitting;
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
-        left: 20, right: 20, top: 16,
+        left: 20,
+        right: 20,
+        top: 16,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: Form(
@@ -98,7 +157,8 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: AppColors.surface2,
@@ -132,7 +192,6 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
               ),
               const SizedBox(height: 12),
 
-              // ✅ Nouveau : Sélecteur de créneau horaire
               _buildCreneauField(),
               const SizedBox(height: 12),
 
@@ -144,7 +203,9 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                       label: 'Nb colis',
                       icon: Icons.inventory_2_outlined,
                       keyboardType: TextInputType.number,
-                      validator: (v) => int.tryParse(v ?? '') == null ? 'Invalide' : null,
+                      validator: (v) => int.tryParse(v ?? '') == null
+                          ? 'Nombre invalide'
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -154,16 +215,17 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                       label: 'Poids (kg)',
                       icon: Icons.scale_outlined,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) => double.tryParse(v ?? '') == null ? 'Invalide' : null,
+                      validator: (v) => double.tryParse(v ?? '') == null
+                          ? 'Poids invalide'
+                          : null,
                     ),
                   ),
                 ],
               ),
 
-              // Sélection véhicule
               const SizedBox(height: 20),
               const Text(
-                'VÉHICULE',
+                'DÉTAILS',
                 style: TextStyle(
                   color: AppColors.coral,
                   fontSize: 11,
@@ -173,7 +235,13 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
               ),
               const SizedBox(height: 10),
 
-              // Statut (édition seulement)
+              _buildField(
+                controller: _notesCtrl,
+                label: 'Notes (optionnel)',
+                icon: Icons.notes_outlined,
+                maxLines: 2,
+              ),
+
               if (_isEdit) ...[
                 const SizedBox(height: 16),
                 const Text(
@@ -210,17 +278,22 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                 ),
               ],
 
-              const SizedBox(height: 12),
-              _buildField(
-                controller: _notesCtrl,
-                label: 'Notes (optionnel)',
-                icon: Icons.notes_outlined,
-                maxLines: 2,
-              ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _submit,
-                child: Text(_isEdit ? 'Enregistrer' : 'Créer la livraison'),
+                onPressed: (_isSubmitting || isGlobalSubmitting) ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: (_isSubmitting || isGlobalSubmitting)
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : Text(_isEdit ? 'Enregistrer' : 'Créer la livraison'),
               ),
             ],
           ),
@@ -229,9 +302,7 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
     );
   }
 
-  //widget pour le créneau horaire
   Widget _buildCreneauField() {
-    // Extraire les heures de début et fin depuis _creneauValue
     String startTime = '09:00';
     String endTime = '12:00';
 

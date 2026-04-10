@@ -1,32 +1,98 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../models/client.dart';
+import '../services/database_service.dart';
 
-//State
-
-enum FiltreClients { tous, recents, inactifs }
+enum FiltreClients { tous, gold, silver, bronze, recurrents, nouveaux }
 
 class ClientsState {
   final List<Client> clients;
   final String recherche;
   final FiltreClients filtre;
+  final bool isLoading;
+  final String? error;
 
   const ClientsState({
-    required this.clients,
+    this.clients = const [],
     this.recherche = '',
     this.filtre = FiltreClients.tous,
+    this.isLoading = false,
+    this.error,
   });
 
   List<Client> get clientsFiltres {
-    var list = clients;
+    List<Client> list = List<Client>.from(clients);
+
+    switch (filtre) {
+      case FiltreClients.gold:
+        list = list.where((c) => c.rang == RangClient.gold).toList();
+        break;
+      case FiltreClients.silver:
+        list = list.where((c) => c.rang == RangClient.silver).toList();
+        break;
+      case FiltreClients.bronze:
+        list = list.where((c) => c.rang == RangClient.bronze).toList();
+        break;
+      case FiltreClients.recurrents:
+        list = list.where((c) => c.estRecurrent).toList();
+        break;
+      case FiltreClients.nouveaux:
+        list = list.where((c) => c.livraisonsTotal <= 1 && !c.estRecurrent).toList();
+        break;
+      case FiltreClients.tous:
+        break;
+    }
+
     if (recherche.isNotEmpty) {
       final q = recherche.toLowerCase();
       list = list.where((c) =>
-        c.nomComplet.toLowerCase().contains(q) ||
-        c.adresse.toLowerCase().contains(q),
+      c.nomComplet.toLowerCase().contains(q) ||
+          c.adresse.toLowerCase().contains(q),
       ).toList();
     }
-    // Tri par livraisons décroissant (= Top clients)
+
+    if (list.isNotEmpty) {
+      list.sort((a, b) {
+        final rangOrder = _rangPriority(a.rang).compareTo(_rangPriority(b.rang));
+        if (rangOrder != 0) return rangOrder;
+        return b.livraisonsTotal.compareTo(a.livraisonsTotal);
+      });
+    }
+
+    return list;
+  }
+
+  int _rangPriority(RangClient rang) {
+    switch (rang) {
+      case RangClient.gold:
+        return 0;
+      case RangClient.silver:
+        return 1;
+      case RangClient.bronze:
+        return 2;
+      case RangClient.standard:
+        return 3;
+    }
+  }
+
+  List<Client> get topClients {
+    final List<Client> list = List<Client>.from(clients);
+    list.removeWhere((c) => c.rang != RangClient.gold && c.rang != RangClient.silver);
     list.sort((a, b) => b.livraisonsTotal.compareTo(a.livraisonsTotal));
+    return list;
+  }
+
+  List<Client> get clientsRecurrents {
+    final List<Client> list = clients.where((c) => c.estRecurrent).toList();
+    list.sort((a, b) => b.livraisonsTotal.compareTo(a.livraisonsTotal));
+    return list;
+  }
+
+  List<Client> get nouveauxClients {
+    final List<Client> list = clients
+        .where((c) => c.livraisonsTotal <= 1 && !c.estRecurrent)
+        .toList();
+    list.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
     return list;
   }
 
@@ -34,118 +100,74 @@ class ClientsState {
     List<Client>? clients,
     String? recherche,
     FiltreClients? filtre,
+    bool? isLoading,
+    String? error,
   }) {
     return ClientsState(
       clients: clients ?? this.clients,
       recherche: recherche ?? this.recherche,
       filtre: filtre ?? this.filtre,
+      isLoading: isLoading ?? this.isLoading,
+      error: error ?? this.error,
     );
   }
 }
 
-//ViewModel
-
 class ClientsViewModel extends StateNotifier<ClientsState> {
-  ClientsViewModel() : super(ClientsState(clients: _mockClients));
+  final DatabaseService _db = DatabaseService();
+  final Uuid _uuid = const Uuid();
+
+  ClientsViewModel() : super(const ClientsState()) {
+    loadClients();
+  }
+
+  Future<void> loadClients() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final clients = await _db.getAllClients();
+      state = state.copyWith(clients: clients, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(error: e.toString(), isLoading: false);
+    }
+  }
 
   void setRecherche(String q) => state = state.copyWith(recherche: q);
   void setFiltre(FiltreClients f) => state = state.copyWith(filtre: f);
 
-  void ajouterClient({
+  Future<void> ajouterClient({
     required String prenom,
     required String nom,
     required String adresse,
-  }) {
+    String? notes,
+  }) async {
     final nouveau = Client(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      prenom: prenom,
-      nom: nom,
-      adresse: adresse,
+      id: _uuid.v4(),
+      prenom: prenom.trim(),
+      nom: nom.trim(),
+      adresse: adresse.trim(),
       rang: RangClient.standard,
       estRecurrent: false,
       livraisonsTotal: 0,
-      tauxSucces: 0,
-      creneauPrefere: '—',
-      historique: [],
+      tauxSucces: 0.0,
+      creneauPrefere: '09:00 - 12:00',
+      dateCreation: DateTime.now(),
+      notes: notes?.trim(),
     );
-    state = state.copyWith(clients: [...state.clients, nouveau]);
+    await _db.insertClient(nouveau);
+    await loadClients();
   }
 
-  void supprimerClient(String id) {
-    state = state.copyWith(
-      clients: state.clients.where((c) => c.id != id).toList(),
-    );
+  Future<void> modifierClient(Client client) async {
+    await _db.updateClient(client);
+    await loadClients();
+  }
+
+  Future<void> supprimerClient(String id) async {
+    await _db.deleteClient(id);
+    await loadClients();
   }
 }
 
-final clientsViewModelProvider =
-    StateNotifierProvider<ClientsViewModel, ClientsState>(
-  (_) => ClientsViewModel(),
+final clientsViewModelProvider = StateNotifierProvider<ClientsViewModel, ClientsState>(
+      (_) => ClientsViewModel(),
 );
-
-//Données mock
-
-final _mockClients = <Client>[
-  Client(
-    id: 'c1',
-    prenom: 'Martin',
-    nom: 'Dupont',
-    adresse: '12 rue Carnot, Lyon',
-    rang: RangClient.gold,
-    estRecurrent: true,
-    livraisonsTotal: 24,
-    tauxSucces: 0.96,
-    creneauPrefere: '14–16h',
-    historique: [
-      HistoriqueLivraison(date: '20 mars · 14h32', adresse: '12 rue Carnot, Lyon', statut: StatutHistorique.livree),
-      HistoriqueLivraison(date: '17 mars · 15h08', adresse: '12 rue Carnot, Lyon', statut: StatutHistorique.livree),
-      HistoriqueLivraison(date: '14 mars · 10h54', adresse: '12 rue Carnot, Lyon', statut: StatutHistorique.reportee),
-      HistoriqueLivraison(date: '10 mars · 14h17', adresse: '12 rue Carnot, Lyon', statut: StatutHistorique.livree),
-    ],
-  ),
-  Client(
-    id: 'c2',
-    prenom: 'Sophie',
-    nom: 'Bernard',
-    adresse: '8 av. de la Paix, Paris',
-    rang: RangClient.silver,
-    estRecurrent: true,
-    livraisonsTotal: 18,
-    tauxSucces: 0.89,
-    creneauPrefere: '9–11h',
-    historique: [
-      HistoriqueLivraison(date: '22 mars · 09h15', adresse: '8 av. de la Paix', statut: StatutHistorique.livree),
-      HistoriqueLivraison(date: '15 mars · 10h30', adresse: '8 av. de la Paix', statut: StatutHistorique.livree),
-      HistoriqueLivraison(date: '08 mars · 09h50', adresse: '8 av. de la Paix', statut: StatutHistorique.echouee),
-    ],
-  ),
-  Client(
-    id: 'c3',
-    prenom: 'Éric',
-    nom: 'Moreau',
-    adresse: '45 blvd V. Hugo, Marseille',
-    rang: RangClient.bronze,
-    estRecurrent: false,
-    livraisonsTotal: 11,
-    tauxSucces: 0.91,
-    creneauPrefere: '16–18h',
-    historique: [
-      HistoriqueLivraison(date: '19 mars · 16h42', adresse: '45 blvd V. Hugo', statut: StatutHistorique.livree),
-      HistoriqueLivraison(date: '12 mars · 17h05', adresse: '45 blvd V. Hugo', statut: StatutHistorique.livree),
-    ],
-  ),
-  Client(
-    id: 'c4',
-    prenom: 'Lucie',
-    nom: 'Fontaine',
-    adresse: '3 impasse des Lilas, Bordeaux',
-    rang: RangClient.standard,
-    estRecurrent: false,
-    livraisonsTotal: 4,
-    tauxSucces: 1.0,
-    creneauPrefere: '10–12h',
-    historique: [
-      HistoriqueLivraison(date: '23 mars · 10h20', adresse: '3 impasse des Lilas', statut: StatutHistorique.livree),
-    ],
-  ),
-];

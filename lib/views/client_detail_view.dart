@@ -1,30 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/client.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 
-//Écran de détail d'un client
-class ClientDetailView extends StatefulWidget {
+class ClientDetailView extends ConsumerStatefulWidget {
   final Client client;
   const ClientDetailView({super.key, required this.client});
 
   @override
-  State<ClientDetailView> createState() => _ClientDetailViewState();
+  ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
 }
 
-class _ClientDetailViewState extends State<ClientDetailView>
+class _ClientDetailViewState extends ConsumerState<ClientDetailView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  List<HistoriqueLivraison> _historique = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadHistorique();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadHistorique() async {
+    setState(() => _isLoading = true);
+    try {
+      final historique = await DatabaseService().getHistoriqueByClient(widget.client.id);
+      setState(() {
+        _historique = historique;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Color get _avatarColor {
@@ -35,7 +52,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
       case RangClient.standard: return AppColors.statusAttente;
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +76,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
     );
   }
 
-  //Hero
   Widget _buildHero(BuildContext context) {
     final c = widget.client;
     return Container(
@@ -79,7 +94,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Back
               GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Row(
@@ -102,7 +116,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar
                   Stack(
                     children: [
                       Container(
@@ -165,7 +178,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
                 ],
               ),
               const SizedBox(height: 14),
-              // KPI row
               Row(
                 children: [
                   _KpiBox(value: '${c.livraisonsTotal}', label: 'Livraisons'),
@@ -190,7 +202,6 @@ class _ClientDetailViewState extends State<ClientDetailView>
     );
   }
 
-  //Tab bar
   Widget _buildTabBar() {
     return Container(
       color: AppColors.surface,
@@ -214,11 +225,14 @@ class _ClientDetailViewState extends State<ClientDetailView>
     );
   }
 
-  //Onglet Historique (timeline)
-
   Widget _buildHistoriqueTab() {
-    final history = widget.client.historique;
-    if (history.isEmpty) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.coral),
+      );
+    }
+
+    if (_historique.isEmpty) {
       return const Center(
         child: Text(
           'Aucun historique',
@@ -226,13 +240,14 @@ class _ClientDetailViewState extends State<ClientDetailView>
         ),
       );
     }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         const Padding(
           padding: EdgeInsets.only(bottom: 8),
           child: Text(
-            'MARS 2026',
+            'HISTORIQUE DES LIVRAISONS',
             style: TextStyle(
               color: AppColors.textMuted,
               fontSize: 10,
@@ -242,10 +257,10 @@ class _ClientDetailViewState extends State<ClientDetailView>
             ),
           ),
         ),
-        ...List.generate(history.length, (i) {
+        ...List.generate(_historique.length, (i) {
           return _TimelineItem(
-            item: history[i],
-            isLast: i == history.length - 1,
+            item: _historique[i],
+            isLast: i == _historique.length - 1,
           );
         }),
       ],
@@ -253,25 +268,76 @@ class _ClientDetailViewState extends State<ClientDetailView>
   }
 
   Widget _buildInfosTab() {
-    return Center(
-      child: Text(
-        'Informations client',
-        style: TextStyle(color: AppColors.textMuted, fontFamily: 'Nunito'),
+    final c = widget.client;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InfoRow(label: 'ID Client', value: c.id),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Nom complet', value: c.nomComplet),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Adresse', value: c.adresse),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Rang', value: c.rang.label),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Client récurrent', value: c.estRecurrent ? 'Oui' : 'Non'),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Total livraisons', value: '${c.livraisonsTotal}'),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Taux de succès', value: '${(c.tauxSucces * 100).toStringAsFixed(0)}%'),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Créneau préféré', value: c.creneauPrefere),
+          const Divider(color: AppColors.border),
+          _InfoRow(label: 'Date création', value: _formatDate(c.dateCreation)),
+        ],
       ),
     );
   }
 
   Widget _buildNotesTab() {
-    return Center(
-      child: Text(
-        'Notes & commentaires',
-        style: TextStyle(color: AppColors.textMuted, fontFamily: 'Nunito'),
+    final notes = widget.client.notes;
+    if (notes == null || notes.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.notes_outlined, color: AppColors.textMuted, size: 48),
+            SizedBox(height: 12),
+            Text(
+              'Aucune note',
+              style: TextStyle(color: AppColors.textMuted, fontFamily: 'Nunito'),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          notes,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 14,
+            fontFamily: 'Nunito',
+          ),
+        ),
       ),
     );
   }
-}
 
-// ── KPI box ───────────────────────────────────────────────────────────────────
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+}
 
 class _KpiBox extends StatelessWidget {
   final String value;
@@ -321,7 +387,46 @@ class _KpiBox extends StatelessWidget {
   }
 }
 
-// ── Timeline item ─────────────────────────────────────────────────────────────
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+                fontFamily: 'Nunito',
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Nunito',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _TimelineItem extends StatelessWidget {
   final HistoriqueLivraison item;
@@ -337,8 +442,6 @@ class _TimelineItem extends StatelessWidget {
     }
   }
 
-  Color get _badgeColor => _dotColor;
-
   String get _icon {
     switch (item.statut) {
       case StatutHistorique.livree:   return '✓';
@@ -353,7 +456,6 @@ class _TimelineItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Colonne timeline (dot + ligne)
           SizedBox(
             width: 24,
             child: Column(
@@ -386,7 +488,6 @@ class _TimelineItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Contenu
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
@@ -415,13 +516,13 @@ class _TimelineItem extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: _badgeColor.withOpacity(0.12),
+                      color: _dotColor.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       item.statut.label,
                       style: TextStyle(
-                        color: _badgeColor,
+                        color: _dotColor,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         fontFamily: 'Nunito',

@@ -1,33 +1,9 @@
 import 'package:flutter/material.dart';
-import '../models/vehicule.dart';
+import '../models/vehicule.dart';  // Contient déjà l'extension EntretienUrgenceX
 import '../theme/app_theme.dart';
 
-//Couleurs par urgence
-extension EntretienUrgenceX on EntretienUrgence {
-  Color get couleur {
-    switch (this) {
-      case EntretienUrgence.rouge: return const Color(0xFFEA4E4E);
-      case EntretienUrgence.jaune: return const Color(0xFFFFB572);
-      case EntretienUrgence.vert:  return const Color(0xFF50D1AA);
-    }
-  }
-
-  Color get tinte {
-    switch (this) {
-      case EntretienUrgence.rouge: return const Color(0x22EA4E4E);
-      case EntretienUrgence.jaune: return const Color(0x22FFB572);
-      case EntretienUrgence.vert:  return const Color(0x2250D1AA);
-    }
-  }
-
-  IconData get icone {
-    switch (this) {
-      case EntretienUrgence.rouge: return Icons.warning_rounded;
-      case EntretienUrgence.jaune: return Icons.info_rounded;
-      case EntretienUrgence.vert:  return Icons.shield_rounded;
-    }
-  }
-}
+// ⚠️ L'extension EntretienUrgenceX est déjà définie dans vehicule.dart
+// NE PAS la redéfinir ici !
 
 //Bannière d'alerte
 class EntretienAlerteBanner extends StatelessWidget {
@@ -39,12 +15,12 @@ class EntretienAlerteBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     // Trouver l'entretien le plus urgent
     final urgents = entretiens.where((e) =>
-      e.urgence == EntretienUrgence.rouge || e.urgence == EntretienUrgence.jaune
+    e.urgence == EntretienUrgence.rouge || e.urgence == EntretienUrgence.jaune
     ).toList();
 
     if (urgents.isEmpty) return const SizedBox.shrink();
 
-    // Trier : rouge d'abord, puis jaune, puis par jours/km restants
+    // Trier : rouge d'abord, puis jaune
     urgents.sort((a, b) {
       if (a.urgence != b.urgence) {
         return a.urgence == EntretienUrgence.rouge ? -1 : 1;
@@ -53,17 +29,7 @@ class EntretienAlerteBanner extends StatelessWidget {
     });
 
     final item = urgents.first;
-    final color = item.urgence.couleur;
-    final isRouge = item.urgence == EntretienUrgence.rouge;
-
-    String sousTitre;
-    if (item.typeEcheance == TypeEcheance.km && item.joursRestants != null) {
-      sousTitre = 'Prévoyez un rendez-vous atelier';
-    } else if (item.joursRestants != null) {
-      sousTitre = 'Prévoyez un rendez-vous atelier';
-    } else {
-      sousTitre = 'Prévoyez un rendez-vous atelier';
-    }
+    final color = item.urgence.couleur;  // Utilise l'extension de vehicule.dart
 
     String delai = '';
     if (item.joursRestants != null) {
@@ -90,7 +56,7 @@ class EntretienAlerteBanner extends StatelessWidget {
               color: color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.warning_rounded, color: color, size: 20),
+            child: Icon(item.urgence.icone, color: color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -107,9 +73,9 @@ class EntretienAlerteBanner extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  sousTitre,
-                  style: const TextStyle(
+                const Text(
+                  'Prévoyez un rendez-vous atelier',
+                  style: TextStyle(
                     color: AppColors.textMuted,
                     fontSize: 13,
                     fontFamily: 'Nunito',
@@ -125,7 +91,6 @@ class EntretienAlerteBanner extends StatelessWidget {
 }
 
 //Card d'un entretien
-
 class EntretienCard extends StatelessWidget {
   final EntretienItem item;
 
@@ -133,9 +98,9 @@ class EntretienCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = item.urgence.couleur;
-    final tinte = item.urgence.tinte;
-    final icon  = item.urgence.icone;
+    final color = item.urgence.couleur;      // Utilise l'extension de vehicule.dart
+    final tinte = item.urgence.tinte;        // Utilise l'extension de vehicule.dart
+    final icon = item.urgence.icone;         // Utilise l'extension de vehicule.dart
 
     String etiquetteDelai = '';
     if (item.joursRestants != null) {
@@ -150,7 +115,7 @@ class EntretienCard extends StatelessWidget {
         item.kmActuels != null &&
         item.kmEcheance != null) {
       sousTitre =
-          '${_formatKm(item.kmActuels!)} km actuels · échéance ${_formatKm(item.kmEcheance!)} km';
+      '${_formatKm(item.kmActuels!)} km actuels · échéance ${_formatKm(item.kmEcheance!)} km';
     } else if (item.dateEcheance != null) {
       sousTitre = 'Échéance : ${item.dateEcheance}';
     }
@@ -184,7 +149,7 @@ class EntretienCard extends StatelessWidget {
                   item.titre,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Nunito',
                   ),
@@ -211,7 +176,7 @@ class EntretienCard extends StatelessWidget {
                 sousTitre,
                 style: const TextStyle(
                   color: AppColors.textMuted,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontFamily: 'Nunito',
                 ),
               ),
@@ -221,7 +186,7 @@ class EntretienCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: item.progressValue,
+              value: item.progressValue.clamp(0.0, 1.0),
               minHeight: 5,
               backgroundColor: Colors.white.withOpacity(0.06),
               valueColor: AlwaysStoppedAnimation<Color>(color),

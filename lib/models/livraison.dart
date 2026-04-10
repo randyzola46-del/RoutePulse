@@ -1,6 +1,3 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-
 enum StatutLivraison {
   enAttente,
   enCours,
@@ -25,6 +22,21 @@ extension StatutLivraisonX on StatutLivraison {
     }
   }
 
+  String get toJson {
+    switch (this) {
+      case StatutLivraison.enAttente:
+        return 'en_attente';
+      case StatutLivraison.enCours:
+        return 'en_cours';
+      case StatutLivraison.livree:
+        return 'livree';
+      case StatutLivraison.aReporter:
+        return 'a_reporter';
+      case StatutLivraison.annulee:
+        return 'annulee';
+    }
+  }
+
   bool get isFinal {
     return this == StatutLivraison.livree || this == StatutLivraison.annulee;
   }
@@ -42,42 +54,27 @@ extension StatutLivraisonX on StatutLivraison {
         return [];
     }
   }
+}
 
-
-  String get actionLabel {
-    switch (this) {
-      case StatutLivraison.enCours:
-        return 'Démarrer la livraison';
-      case StatutLivraison.livree:
-        return 'Livrée (succès)';
-      case StatutLivraison.annulee:
-        return 'Annulée (échec)';
-      case StatutLivraison.aReporter:
-        return 'Reporter à plus tard';
-      case StatutLivraison.enAttente:
-        return 'Remettre en attente';
-    }
-  }
-
-  //Icône pour chaque action
-  IconData get actionIcon {
-    switch (this) {
-      case StatutLivraison.enCours:
-        return Icons.play_arrow;
-      case StatutLivraison.livree:
-        return Icons.check_circle;
-      case StatutLivraison.annulee:
-        return Icons.cancel;
-      case StatutLivraison.aReporter:
-        return Icons.schedule;
-      case StatutLivraison.enAttente:
-        return Icons.refresh;
-    }
+// ✅ Fonction statique pour convertir du JSON
+StatutLivraison statutLivraisonFromJson(String value) {
+  switch (value) {
+    case 'en_cours':
+      return StatutLivraison.enCours;
+    case 'livree':
+      return StatutLivraison.livree;
+    case 'a_reporter':
+      return StatutLivraison.aReporter;
+    case 'annulee':
+      return StatutLivraison.annulee;
+    default:
+      return StatutLivraison.enAttente;
   }
 }
 
 class Livraison {
   final String id;
+  final String clientId;
   final String nomClient;
   final String adresse;
   final String creneau;
@@ -87,9 +84,11 @@ class Livraison {
   final String? notes;
   final DateTime dateCreation;
   final String? vehiculeId;
+  final String? historiqueId;
 
   const Livraison({
     required this.id,
+    required this.clientId,
     required this.nomClient,
     required this.adresse,
     required this.creneau,
@@ -99,10 +98,46 @@ class Livraison {
     this.notes,
     required this.dateCreation,
     this.vehiculeId,
+    this.historiqueId,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'client_id': clientId,
+      'nom_client': nomClient,
+      'adresse': adresse,
+      'creneau': creneau,
+      'nb_colis': nbColis,
+      'poids': poids,
+      'statut': statut.toJson,
+      'notes': notes,
+      'date_creation': dateCreation.toIso8601String(),
+      'vehicule_id': vehiculeId,
+      'historique_id': historiqueId,
+    };
+  }
+
+  factory Livraison.fromMap(Map<String, dynamic> map) {
+    return Livraison(
+      id: map['id'],
+      clientId: map['client_id'],
+      nomClient: map['nom_client'],
+      adresse: map['adresse'],
+      creneau: map['creneau'],
+      nbColis: map['nb_colis'],
+      poids: map['poids'],
+      statut: statutLivraisonFromJson(map['statut']), // ✅ Utiliser la fonction statique
+      notes: map['notes'],
+      dateCreation: DateTime.parse(map['date_creation']),
+      vehiculeId: map['vehicule_id'],
+      historiqueId: map['historique_id'],
+    );
+  }
 
   Livraison copyWith({
     String? id,
+    String? clientId,
     String? nomClient,
     String? adresse,
     String? creneau,
@@ -111,10 +146,12 @@ class Livraison {
     StatutLivraison? statut,
     String? notes,
     DateTime? dateCreation,
-    Object? vehiculeId = _sentinel,
+    String? vehiculeId,
+    String? historiqueId,
   }) {
     return Livraison(
       id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
       nomClient: nomClient ?? this.nomClient,
       adresse: adresse ?? this.adresse,
       creneau: creneau ?? this.creneau,
@@ -123,9 +160,8 @@ class Livraison {
       statut: statut ?? this.statut,
       notes: notes ?? this.notes,
       dateCreation: dateCreation ?? this.dateCreation,
-      vehiculeId: vehiculeId == _sentinel ? this.vehiculeId : vehiculeId as String?,
+      vehiculeId: vehiculeId ?? this.vehiculeId,
+      historiqueId: historiqueId ?? this.historiqueId,
     );
   }
 }
-
-const _sentinel = Object();

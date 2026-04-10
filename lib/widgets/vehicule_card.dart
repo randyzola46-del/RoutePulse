@@ -20,6 +20,20 @@ class VehiculeCard extends StatelessWidget {
   Color get _accentColor =>
       _actif ? AppColors.statusLivree : AppColors.textMuted;
 
+  // Icône selon le type de véhicule
+  IconData _getIconForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'moto':
+        return Icons.moped;
+      case 'voiture':
+        return Icons.directions_car_rounded;
+      case 'fourgon':
+        return Icons.local_shipping_rounded;
+      default:
+        return Icons.local_shipping_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -84,7 +98,7 @@ class VehiculeCard extends StatelessWidget {
             border: Border.all(color: _accentColor.withOpacity(0.25)),
           ),
           child: Icon(
-            Icons.local_shipping_rounded,
+            _getIconForType(vehicule.type),
             color: _accentColor,
             size: 22,
           ),
@@ -159,8 +173,6 @@ class VehiculeCard extends StatelessWidget {
   }
 }
 
-//Toggle Actif / Inactif
-
 class _ToggleActif extends StatelessWidget {
   final bool actif;
   final ValueChanged<bool>? onChanged;
@@ -208,7 +220,7 @@ class _ToggleActif extends StatelessWidget {
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeInOut,
               alignment:
-                  actif ? Alignment.centerRight : Alignment.centerLeft,
+              actif ? Alignment.centerRight : Alignment.centerLeft,
               child: Container(
                 width: 16,
                 height: 16,
@@ -232,8 +244,6 @@ class _ToggleActif extends StatelessWidget {
     );
   }
 }
-
-//Cellule jauge
 
 class _JaugeCell extends StatelessWidget {
   final String label;

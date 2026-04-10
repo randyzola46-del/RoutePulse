@@ -6,8 +6,11 @@ import '../models/client.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/vehicules_viewmodel.dart';
 import '../viewmodels/clients_viewmodel.dart';
+import '../viewmodels/livraisons_viewmodel.dart';
+import '../widgets/client_form_sheet.dart';
+import '../widgets/livraison_form_sheet.dart';
 import '../widgets/vehicule_card.dart';
-import '../widgets/client_row.dart';
+import '../widgets/client_card.dart';
 import 'vehicule_detail_view.dart';
 import 'client_detail_view.dart';
 import 'vehicule_form_view.dart';
@@ -29,7 +32,7 @@ class _GestionViewState extends ConsumerState<GestionView>
     _tabController = TabController(
       length: 2,
       vsync: this,
-      animationDuration: const Duration(milliseconds: 300), // 👈
+      animationDuration: const Duration(milliseconds: 300),
     );
     _tabController.addListener(() => setState(() {}));
   }
@@ -52,10 +55,10 @@ class _GestionViewState extends ConsumerState<GestionView>
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                physics: const BouncingScrollPhysics(), // 👈
+                physics: const BouncingScrollPhysics(),
                 children: [
-                  _VehiculesTab(),
-                  _ClientsTab(),
+                  const _VehiculesTab(),
+                  const _ClientsTab(),
                 ],
               ),
             ),
@@ -73,7 +76,7 @@ class _GestionViewState extends ConsumerState<GestionView>
           Expanded(
             child: GestureDetector(
               onTap: () => _tabController.animateTo(0),
-              child: AnimatedContainer( // 👈
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -117,7 +120,7 @@ class _GestionViewState extends ConsumerState<GestionView>
           Expanded(
             child: GestureDetector(
               onTap: () => _tabController.animateTo(1),
-              child: AnimatedContainer( // 👈
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -164,8 +167,11 @@ class _GestionViewState extends ConsumerState<GestionView>
   }
 }
 
-// ONGLET VÉHICULES
+// ========== ONGLET VÉHICULES ==========
+
 class _VehiculesTab extends ConsumerWidget {
+  const _VehiculesTab();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(vehiculesViewModelProvider);
@@ -190,7 +196,11 @@ class _VehiculesTab extends ConsumerWidget {
           onSelect: vm.setFiltreDisponibilite,
         ),
         Expanded(
-          child: state.vehiculesFiltres.isEmpty
+          child: state.isLoading
+              ? const Center(
+            child: CircularProgressIndicator(color: AppColors.coral),
+          )
+              : state.vehiculesFiltres.isEmpty
               ? const _EmptyState(
             icon: Icons.local_shipping_outlined,
             message: 'Aucun véhicule',
@@ -293,8 +303,7 @@ class _VehiculesHeader extends StatelessWidget {
               GestureDetector(
                 onTap: onAjouter,
                 child: Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.statusCours,
                     borderRadius: BorderRadius.circular(12),
@@ -354,7 +363,7 @@ class _VehiculesFilterTabs extends StatelessWidget {
           return Expanded(
             child: GestureDetector(
               onTap: () => onSelect(options[i]),
-              child: AnimatedContainer( // 👈
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -385,8 +394,129 @@ class _VehiculesFilterTabs extends StatelessWidget {
   }
 }
 
-// ONGLET CLIENTS
+// ========== ONGLET CLIENTS ==========
+
 class _ClientsTab extends ConsumerWidget {
+  const _ClientsTab();
+
+  void _showNewDeliverySheet(BuildContext context, Client client) {
+    final prefill = ClientPrefill(
+      nom: client.nomComplet,
+      adresse: client.adresse,
+      creneauPrefere: client.creneauPrefere,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => LivraisonFormSheet(
+        prefillClient: prefill,
+      ),
+    );
+  }
+
+  void _showAddClientSheet(BuildContext context, ClientsViewModel vm) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ClientFormSheet(
+        onSubmit: (prenom, nom, adresse, notes) async {
+          await vm.ajouterClient(
+            prenom: prenom,
+            nom: nom,
+            adresse: adresse,
+            notes: notes,
+          );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Client ajouté avec succès'),
+                backgroundColor: AppColors.statusLivree,
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  void _showEditClientSheet(BuildContext context, ClientsViewModel vm, Client client) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ClientFormSheet(
+        client: client,
+        onSubmit: (prenom, nom, adresse, notes) async {
+          final updated = client.copyWith(
+            prenom: prenom,
+            nom: nom,
+            adresse: adresse,
+            notes: notes,
+          );
+          await vm.modifierClient(updated);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Client modifié avec succès'),
+                backgroundColor: AppColors.statusCours,
+                duration: Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, ClientsViewModel vm, Client client) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Supprimer le client ?',
+          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer ${client.nomComplet} ? Cette action est irréversible.',
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusAnnulee),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await vm.supprimerClient(client.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${client.nomComplet} a été supprimé'),
+            backgroundColor: AppColors.statusAnnulee,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(clientsViewModelProvider);
@@ -396,7 +526,8 @@ class _ClientsTab extends ConsumerWidget {
       children: [
         _ClientsHeader(
           count: state.clients.length,
-          onAjouter: () {/* TODO */},
+          onAjouter: () => _showAddClientSheet(context, vm),
+          onRefresh: () => vm.loadClients(),
         ),
         _SearchBar(
           hintText: 'Rechercher un client...',
@@ -408,43 +539,45 @@ class _ClientsTab extends ConsumerWidget {
           onSelect: vm.setFiltre,
         ),
         Expanded(
-          child: state.clientsFiltres.isEmpty
-              ? const _EmptyState(
-            icon: Icons.group_outlined,
-            message: 'Aucun client',
-            sub: 'Ajoutez votre premier client',
+          child: state.isLoading
+              ? const Center(
+            child: CircularProgressIndicator(color: AppColors.coral),
           )
-              : Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border:
-              Border.all(color: Colors.white.withOpacity(0.06)),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: ListView.builder(
-                shrinkWrap: false,
-                padding: EdgeInsets.zero,
-                itemCount: state.clientsFiltres.length,
-                itemBuilder: (ctx, i) {
-                  final c = state.clientsFiltres[i];
-                  return ClientRow(
-                    client: c,
-                    onTap: () => Navigator.push(
-                      ctx,
-                      MaterialPageRoute(
-                        builder: (_) => ClientDetailView(client: c),
-                      ),
+              : RefreshIndicator(
+            onRefresh: () => vm.loadClients(),
+            color: AppColors.coral,
+            backgroundColor: AppColors.surface,
+            child: state.clientsFiltres.isEmpty
+                ? const _EmptyState(
+              icon: Icons.group_outlined,
+              message: 'Aucun client',
+              sub: 'Ajoutez votre premier client',
+            )
+                : ListView.builder(
+              padding: const EdgeInsets.only(bottom: 24, top: 4),
+              itemCount: state.clientsFiltres.length,
+              itemBuilder: (ctx, i) {
+                final filteredList = state.clientsFiltres;
+                if (i >= filteredList.length) {
+                  return const SizedBox.shrink();
+                }
+                final client = filteredList[i];
+                return ClientCard(
+                  client: client,
+                  onTap: () => Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                      builder: (_) => ClientDetailView(client: client),
                     ),
-                  );
-                },
-              ),
+                  ),
+                  onEdit: () => _showEditClientSheet(context, vm, client),
+                  onDelete: () => _confirmDelete(context, vm, client),
+                  onNewDelivery: () => _showNewDeliverySheet(context, client),
+                );
+              },
             ),
           ),
         ),
-        const SizedBox(height: 16),
       ],
     );
   }
@@ -453,8 +586,13 @@ class _ClientsTab extends ConsumerWidget {
 class _ClientsHeader extends StatelessWidget {
   final int count;
   final VoidCallback onAjouter;
+  final VoidCallback onRefresh;
 
-  const _ClientsHeader({required this.count, required this.onAjouter});
+  const _ClientsHeader({
+    required this.count,
+    required this.onAjouter,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -470,25 +608,25 @@ class _ClientsHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: AppColors.statusAttente.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.statusAttente.withOpacity(0.25),
-              ),
-            ),
-            child: const Icon(
-              Icons.group_rounded,
-              color: AppColors.statusAttente,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
             children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: AppColors.statusAttente.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.statusAttente.withOpacity(0.25),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.group_rounded,
+                  color: AppColors.statusAttente,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,7 +642,7 @@ class _ClientsHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$count client${count > 1 ? "s" : ""} récurrent${count > 1 ? "s" : ""}',
+                      '$count client${count > 1 ? "s" : ""}',
                       style: const TextStyle(
                         color: AppColors.statusAttente,
                         fontSize: 13,
@@ -516,10 +654,25 @@ class _ClientsHeader extends StatelessWidget {
                 ),
               ),
               GestureDetector(
+                onTap: onRefresh,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface2.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.textMuted,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
                 onTap: onAjouter,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.statusAttente,
                     borderRadius: BorderRadius.circular(12),
@@ -565,53 +718,57 @@ class _ClientsFilterTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final options = FiltreClients.values;
-    final labels = ['Top clients', 'Récents', 'Inactifs'];
+    final options = <FiltreClients>[
+      FiltreClients.tous,
+      FiltreClients.gold,
+      FiltreClients.silver,
+      FiltreClients.bronze,
+      FiltreClients.recurrents,
+    ];
+
+    final labels = ['Tous', 'Gold', 'Silver', 'Bronze', 'Récurrents'];
 
     return Container(
       color: AppColors.bgPrincipal,
-      child: Row(
-        children: List.generate(options.length, (i) {
-          final isActive = filtre == options[i];
-          return Expanded(
-            child: GestureDetector(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(options.length, (i) {
+            final isActive = filtre == options[i];
+            return GestureDetector(
               onTap: () => onSelect(options[i]),
-              child: AnimatedContainer( // 👈
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: isActive
-                          ? AppColors.statusLivree
-                          : Colors.transparent,
+                      color: isActive ? AppColors.coral : Colors.transparent,
                       width: 2,
                     ),
                   ),
                 ),
                 child: Text(
                   labels[i],
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: isActive
-                        ? AppColors.statusLivree
-                        : AppColors.textMuted,
+                    color: isActive ? AppColors.coral : AppColors.textMuted,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     fontFamily: 'Nunito',
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
 }
 
-// WIDGETS PARTAGÉS
+// ========== WIDGETS PARTAGÉS ==========
 
 class _SearchBar extends StatelessWidget {
   final String hintText;
@@ -632,21 +789,18 @@ class _SearchBar extends StatelessWidget {
         onChanged: onChanged,
         style: const TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 14,
+          fontSize: 16,
           fontFamily: 'Nunito',
         ),
         decoration: InputDecoration(
           hintText: hintText,
-          prefixIcon:
-          Icon(Icons.search_rounded, color: accentColor, size: 20),
+          prefixIcon: Icon(Icons.search_rounded, color: accentColor, size: 20),
           filled: true,
           fillColor: AppColors.surface,
-          contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide:
-            BorderSide(color: Colors.white.withOpacity(0.08)),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),

@@ -21,7 +21,6 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
   String? _lastDeletedId;
   bool _isUpdatingPoids = false;
 
-  // Véhicule actif (le premier disponible, ou null)
   Vehicule? _vehiculeActif(VehiculesState state) {
     try {
       return state.vehicules.firstWhere(
@@ -32,7 +31,6 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
     }
   }
 
-  // Calculer le poids total des livraisons en cours
   void _mettreAJourPoidsVehicule(List<Livraison> livraisons) {
     if (_isUpdatingPoids) return;
     _isUpdatingPoids = true;
@@ -53,7 +51,6 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
     String message = _getStatutChangeMessage(livraison.nomClient, nouveauStatut);
     SnackBarUtils.showStatutChange(context, nouveauStatut, message);
 
-    // Mettre à jour le poids du véhicule après le changement
     Future.microtask(() {
       final etatActuel = ref.read(livraisonsViewModelProvider);
       _mettreAJourPoidsVehicule(etatActuel.livraisons);
@@ -77,13 +74,16 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(livraisonsViewModelProvider);
+    final state = ref.watch(livraisonsViewModelProvider);  // ← watch important!
     final vm = ref.read(livraisonsViewModelProvider.notifier);
     final vehiculesState = ref.watch(vehiculesViewModelProvider);
     final vehiculeActif = _vehiculeActif(vehiculesState);
 
-    // Mettre à jour le poids du véhicule quand l'état change
+    // Forcer le rafraîchissement au montage si nécessaire
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (state.livraisons.isEmpty && !state.isLoading) {
+        vm.chargerLivraisons();
+      }
       _mettreAJourPoidsVehicule(state.livraisons);
     });
 
@@ -98,21 +98,14 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
             _buildFiltreChips(state, vm),
             const SizedBox(height: 4),
             Expanded(child: _buildListeOuVide(context, ref, state, vm, vehiculeActif)),
-            // Barre de progression charge véhicule (si véhicule actif)
             if (vehiculeActif != null)
               _BarreChargeVehicule(
                 vehicule: vehiculeActif,
                 poidsActuel: _poidsActuelVehicule,
               ),
+            _buildBottomActionBar(),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _ouvrirFormulaire(context),
-        backgroundColor: AppColors.coral,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        child: const Icon(Icons.add, size: 28),
       ),
     );
   }
@@ -250,7 +243,6 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
       return _EtatVide(onAjouter: () => _ouvrirFormulaire(context));
     }
 
-    // Grouper par mois
     final groupes = <String, List<Livraison>>{};
     for (final l in liste) {
       final mois = _formatMois(l.dateCreation);
@@ -267,7 +259,7 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 100, top: 8),
+      padding: const EdgeInsets.only(bottom: 20, top: 8),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
@@ -296,7 +288,6 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
 
             SnackBarUtils.showError(context, '$livraisonNom supprimé');
 
-            // Réinitialiser après un délai
             Future.delayed(const Duration(milliseconds: 500), () {
               if (_lastDeletedId == livraisonId) {
                 _lastDeletedId = null;
@@ -306,6 +297,43 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
           onStatutChange: (nouveauStatut) => _handleStatutChange(livraison, nouveauStatut, vm),
         );
       },
+    );
+  }
+
+  // NOUVEAU : Widget pour la barre d'action en bas
+  Widget _buildBottomActionBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: ElevatedButton.icon(
+          onPressed: () => _ouvrirFormulaire(context),
+          icon: const Icon(Icons.add, size: 24),
+          label: const Text(
+            'Nouvelle livraison',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.coral,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 2,
+          ),
+        ),
+      ),
     );
   }
 
@@ -350,7 +378,7 @@ class _BarreChargeVehicule extends StatelessWidget {
     final surcharge = poidsActuel > vehicule.chargeMaxKg;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(
@@ -462,27 +490,12 @@ class _BarreChargeVehicule extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                color: _couleurBarre.withOpacity(0.8),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Nunito',
-              ),
-              child: Text('${(_ratio * 100).toStringAsFixed(0)} %'),
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-// Séparateur de mois
 class _MonthSeparator extends StatelessWidget {
   final String label;
   const _MonthSeparator({required this.label});
@@ -523,7 +536,6 @@ class _MonthSeparator extends StatelessWidget {
   }
 }
 
-// État vide
 class _EtatVide extends StatelessWidget {
   final VoidCallback onAjouter;
   const _EtatVide({required this.onAjouter});
@@ -570,7 +582,6 @@ class _EtatVide extends StatelessWidget {
   }
 }
 
-// Helpers
 class _FiltreItem {
   final StatutLivraison? statut;
   final String label;

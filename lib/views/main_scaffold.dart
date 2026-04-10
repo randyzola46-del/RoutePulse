@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_view.dart';
 import 'livraisons_list_view.dart';
+import 'carte_view.dart';
 import 'gestion_view.dart';
 import 'stats_view.dart';
 
@@ -29,7 +30,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
         children: [
           DashboardView(onVoirTout: () => _navigateTo(1)),
           const LivraisonsListView(),
-          const _PlaceholderPage('Carte'),
+          const CarteView(),
           const StatsView(),
           const GestionView(),
         ],
