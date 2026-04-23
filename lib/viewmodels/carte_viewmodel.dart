@@ -1,11 +1,12 @@
 // lib/viewmodels/carte_viewmodel.dart
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/livraison.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
 import '../services/tsptw_service.dart';
 import '../services/osrm_service.dart';
 import '../services/location_service.dart';
-
 // ─── State ───────────────────────────────────────────────────────────────────
 
 enum MapStatus { idle, locating, geocoding, computing, fetchingRoute, ready, error }
@@ -114,10 +115,25 @@ class CarteState {
 
 class CarteViewModel extends StateNotifier<CarteState> {
   final Ref _ref;
-  static const double _maxDistanceFromOriginKm = 50.0; // Distance max raisonnable
+  static const double _maxDistanceFromOriginKm = 50.0;
+
+  // ✅ Subscription pour écouter les changements de livraisons
+  late final ProviderSubscription _livraisonsSubscription;
+
+  // Flag pour éviter les optimisations multiples en rafale
+  bool _isOptimizing = false;
+  Timer? _debounceTimer;
 
   CarteViewModel(this._ref) : super(const CarteState()) {
     _init();
+
+    // ✅ Écouter les changements dans les livraisons
+    _livraisonsSubscription = _ref.listen(
+      livraisonsViewModelProvider,
+          (previous, next) {
+        _onLivraisonsChanged(previous, next);
+      },
+    );
   }
 
   // ── Initialisation ────────────────────────────────────────────────────────
@@ -132,6 +148,44 @@ class CarteViewModel extends StateNotifier<CarteState> {
   Future<void> _loadAllLivraisons() async {
     final allLivraisons = _ref.read(livraisonsViewModelProvider).livraisons;
     state = state.copyWith(allLivraisons: allLivraisons);
+  }
+
+  // ── ✅ NOUVEAU : Réaction aux changements de livraisons ────────────────────
+
+  Future<void> _onLivraisonsChanged(
+      LivraisonsState? previous,
+      LivraisonsState current,
+      ) async {
+    if (previous == null) return;
+
+    // Extraire les IDs des livraisons en cours
+    final prevEnCoursIds = previous.livraisons
+        .where((l) => l.statut == StatutLivraison.enCours)
+        .map((l) => l.id)
+        .toSet();
+
+    final currEnCoursIds = current.livraisons
+        .where((l) => l.statut == StatutLivraison.enCours)
+        .map((l) => l.id)
+        .toSet();
+
+    // Vérifier si la liste des livraisons en cours a vraiment changé
+    final hasChanged = prevEnCoursIds.length != currEnCoursIds.length ||
+        !currEnCoursIds.containsAll(prevEnCoursIds);
+
+    if (hasChanged) {
+      print('🔄 Optimisation automatique déclenchée');
+      print('   Livraisons en cours: ${prevEnCoursIds.length} → ${currEnCoursIds.length}');
+
+      // Mettre à jour la liste des livraisons
+      state = state.copyWith(allLivraisons: current.livraisons);
+
+      // Debounce pour éviter les optimisations multiples en rafale
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+        await optimizeRoute();
+      });
+    }
   }
 
   // ── Géolocalisation GPS réelle ────────────────────────────────────────────
@@ -201,120 +255,132 @@ class CarteViewModel extends StateNotifier<CarteState> {
   // ── Optimisation TSPTW + OSRM ─────────────────────────────────────────────
 
   Future<void> optimizeRoute() async {
-    // Filtrer UNIQUEMENT les livraisons "en cours"
-    final livraisonsEnCours = _ref
-        .read(livraisonsViewModelProvider)
-        .livraisons
-        .where((l) => l.statut == StatutLivraison.enCours)
-        .toList();
-
-    print('📦 Livraisons EN COURS: ${livraisonsEnCours.length}');
-
-    if (livraisonsEnCours.isEmpty) {
-      state = state.copyWith(status: MapStatus.idle, routeResult: null);
+    // Éviter les optimisations multiples simultanées
+    if (_isOptimizing) {
+      print('⏳ Optimisation déjà en cours, ignorée');
       return;
     }
 
-    // ── Étape 1 : Géolocalisation ────────────────────────────────────────
-    if (state.userLocation == null) {
-      await _locateUser();
-    }
+    _isOptimizing = true;
 
-    if (state.userLocation == null) {
-      state = state.copyWith(
-        status: MapStatus.error,
-        errorMessage: 'Position GPS indisponible. Veuillez activer la localisation.',
-      );
-      return;
-    }
+    try {
+      // Filtrer UNIQUEMENT les livraisons "en cours"
+      final livraisonsEnCours = _ref
+          .read(livraisonsViewModelProvider)
+          .livraisons
+          .where((l) => l.statut == StatutLivraison.enCours)
+          .toList();
 
-    print('📍 Origine: ${state.userLocation!.lat}, ${state.userLocation!.lng}');
+      print('📦 Livraisons EN COURS: ${livraisonsEnCours.length}');
 
-    // ── Étape 2 : Géocodage des adresses ────────────────────────────────
-    state = state.copyWith(
-      status: MapStatus.geocoding,
-      geocodingProgress: GeocodingProgress(done: 0, total: livraisonsEnCours.length),
-    );
+      if (livraisonsEnCours.isEmpty) {
+        state = state.copyWith(status: MapStatus.idle, routeResult: null);
+        return;
+      }
 
-    int done = 0;
-    final stops = <StopTSPTW>[];
-    final failedAddresses = <String>[];
+      // ── Étape 1 : Géolocalisation ────────────────────────────────────────
+      if (state.userLocation == null) {
+        await _locateUser();
+      }
 
-    for (final l in livraisonsEnCours) {
-      final stop = await _geocodeLivraison(l, (addr) {
+      if (state.userLocation == null) {
         state = state.copyWith(
-          geocodingProgress: GeocodingProgress(
-            done: done,
-            total: livraisonsEnCours.length,
-            currentAddress: addr,
-            failedAddresses: failedAddresses,
-          ),
+          status: MapStatus.error,
+          errorMessage: 'Position GPS indisponible. Veuillez activer la localisation.',
         );
-      }, state.userLocation, failedAddresses);
+        return;
+      }
 
-      done++;
-      if (stop != null) stops.add(stop);
-    }
+      print('📍 Origine: ${state.userLocation!.lat}, ${state.userLocation!.lng}');
 
-    // Mettre à jour l'état avec les adresses en échec
-    state = state.copyWith(failedGeocodingAddresses: failedAddresses);
-
-    if (stops.isEmpty) {
+      // ── Étape 2 : Géocodage des adresses ────────────────────────────────
       state = state.copyWith(
-        status: MapStatus.error,
-        errorMessage: 'Aucune adresse n\'a pu être géocodée. ${failedAddresses.length} adresse(s) invalide(s).',
+        status: MapStatus.geocoding,
+        geocodingProgress: GeocodingProgress(done: 0, total: livraisonsEnCours.length),
       );
-      return;
-    }
 
-    // Afficher un avertissement si des adresses ont échoué
-    if (failedAddresses.isNotEmpty) {
-      print('⚠️ ${failedAddresses.length} adresse(s) non géocodée(s) ou trop éloignée(s)');
-    }
+      int done = 0;
+      final stops = <StopTSPTW>[];
+      final failedAddresses = <String>[];
 
-    print('📍 Stops géocodés valides: ${stops.length}/${livraisonsEnCours.length}');
+      for (final l in livraisonsEnCours) {
+        final stop = await _geocodeLivraison(l, (addr) {
+          state = state.copyWith(
+            geocodingProgress: GeocodingProgress(
+              done: done,
+              total: livraisonsEnCours.length,
+              currentAddress: addr,
+              failedAddresses: failedAddresses,
+            ),
+          );
+        }, state.userLocation, failedAddresses);
 
-    // ── Étape 3 : Algorithme TSPTW ───────────────────────────────────────
-    state = state.copyWith(
-      status: MapStatus.computing,
-      geocodingProgress: null,
-    );
+        done++;
+        if (stop != null) stops.add(stop);
+      }
 
-    final origin = state.userLocation!;
-    final result = TsptwService.optimize(stops: stops, origin: origin);
+      // Mettre à jour l'état avec les adresses en échec
+      state = state.copyWith(failedGeocodingAddresses: failedAddresses);
 
-    print('📊 Tournée calculée: ${result.orderedStops.length} arrêts, ${result.totalDistanceKm.toStringAsFixed(1)} km');
+      if (stops.isEmpty) {
+        state = state.copyWith(
+          status: MapStatus.error,
+          errorMessage: 'Aucune adresse n\'a pu être géocodée. ${failedAddresses.length} adresse(s) invalide(s).',
+        );
+        return;
+      }
 
-    state = state.copyWith(
-      status: MapStatus.fetchingRoute,
-      routeResult: result,
-    );
+      // Afficher un avertissement si des adresses ont échoué
+      if (failedAddresses.isNotEmpty) {
+        print('⚠️ ${failedAddresses.length} adresse(s) non géocodée(s) ou trop éloignée(s)');
+      }
 
-    // ── Étape 4 : Route réelle OSRM ──────────────────────────────────────
-    final waypoints = [
-      origin,
-      ...result.orderedStops.map((s) => s.position),
-    ];
+      print('📍 Stops géocodés valides: ${stops.length}/${livraisonsEnCours.length}');
 
-    final osrm = await OsrmService.getRoute(waypoints);
-
-    if (osrm != null && osrm.geometry.length >= 2) {
-      print('✅ Route OSRM récupérée: ${osrm.distanceKm.toStringAsFixed(1)} km, ${osrm.durationMin.toStringAsFixed(0)} min');
+      // ── Étape 3 : Algorithme TSPTW ───────────────────────────────────────
       state = state.copyWith(
-        status: MapStatus.ready,
-        osrmGeometry: osrm.geometry,
-        osrmDistanceKm: osrm.distanceKm,
-        osrmDurationMin: osrm.durationMin,
-        useOsrm: true,
+        status: MapStatus.computing,
+        geocodingProgress: null,
       );
-    } else {
-      print('⚠️ OSRM indisponible ou route invalide, fallback Haversine');
-      // Fallback: créer une ligne droite entre les points
+
+      final origin = state.userLocation!;
+      final result = TsptwService.optimize(stops: stops, origin: origin);
+
+      print('📊 Tournée calculée: ${result.orderedStops.length} arrêts, ${result.totalDistanceKm.toStringAsFixed(1)} km');
+
       state = state.copyWith(
-        status: MapStatus.ready,
-        osrmGeometry: waypoints,
-        useOsrm: false,
+        status: MapStatus.fetchingRoute,
+        routeResult: result,
       );
+
+      // ── Étape 4 : Route réelle OSRM ──────────────────────────────────────
+      final waypoints = [
+        origin,
+        ...result.orderedStops.map((s) => s.position),
+      ];
+
+      final osrm = await OsrmService.getRoute(waypoints);
+
+      if (osrm != null && osrm.geometry.length >= 2) {
+        print('✅ Route OSRM récupérée: ${osrm.distanceKm.toStringAsFixed(1)} km, ${osrm.durationMin.toStringAsFixed(0)} min');
+        state = state.copyWith(
+          status: MapStatus.ready,
+          osrmGeometry: osrm.geometry,
+          osrmDistanceKm: osrm.distanceKm,
+          osrmDurationMin: osrm.durationMin,
+          useOsrm: true,
+        );
+      } else {
+        print('⚠️ OSRM indisponible ou route invalide, fallback Haversine');
+        // Fallback: créer une ligne droite entre les points
+        state = state.copyWith(
+          status: MapStatus.ready,
+          osrmGeometry: waypoints,
+          useOsrm: false,
+        );
+      }
+    } finally {
+      _isOptimizing = false;
     }
   }
 
@@ -348,8 +414,21 @@ class CarteViewModel extends StateNotifier<CarteState> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _livraisonsSubscription.close();
     LocationService.stopTracking();
     super.dispose();
+  }
+}
+
+// ─── Extension helper pour Set ───────────────────────────────────────────────
+
+extension SetExtension<T> on Set<T> {
+  bool containsAll(Set<T> other) {
+    for (final item in other) {
+      if (!contains(item)) return false;
+    }
+    return true;
   }
 }
 

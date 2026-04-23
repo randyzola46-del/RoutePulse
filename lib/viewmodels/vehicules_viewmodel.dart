@@ -1,7 +1,8 @@
+// lib/viewmodels/vehicules_viewmodel.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/vehicule.dart';
-import '../services/database_service.dart';
+import '../services/app_database_service.dart';  // ✅ CHANGÉ
 import 'livraisons_viewmodel.dart';
 
 class VehiculesState {
@@ -57,7 +58,7 @@ const _sentinel = Object();
 
 class VehiculesViewModel extends StateNotifier<VehiculesState> {
   final Ref _ref;
-  final DatabaseService _db = DatabaseService();
+  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
   final Uuid _uuid = const Uuid();
 
   VehiculesViewModel(this._ref) : super(const VehiculesState()) {

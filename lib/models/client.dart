@@ -48,6 +48,7 @@ class Client {
   final String prenom;
   final String nom;
   final String adresse;
+  final String? phone;
   final RangClient rang;
   final bool estRecurrent;
   final int livraisonsTotal;
@@ -61,6 +62,7 @@ class Client {
     required this.prenom,
     required this.nom,
     required this.adresse,
+    this.phone,
     required this.rang,
     required this.estRecurrent,
     required this.livraisonsTotal,
@@ -97,6 +99,7 @@ class Client {
       'prenom': prenom,
       'nom': nom,
       'adresse': adresse,
+      'phone': phone,
       'rang': rang.toJson,
       'est_recurrent': estRecurrent ? 1 : 0,
       'livraisons_total': livraisonsTotal,
@@ -113,6 +116,7 @@ class Client {
       prenom: map['prenom'] ?? '',
       nom: map['nom'] ?? '',
       adresse: map['adresse'] ?? '',
+      phone: map['phone'],
       rang: rangClientFromJson(map['rang'] ?? 'standard'),
       estRecurrent: map['est_recurrent'] == 1,
       livraisonsTotal: map['livraisons_total'] ?? 0,
@@ -128,6 +132,7 @@ class Client {
     String? prenom,
     String? nom,
     String? adresse,
+    String? phone,
     RangClient? rang,
     bool? estRecurrent,
     int? livraisonsTotal,
@@ -141,6 +146,7 @@ class Client {
       prenom: prenom ?? this.prenom,
       nom: nom ?? this.nom,
       adresse: adresse ?? this.adresse,
+      phone: phone ?? this.phone,
       rang: rang ?? this.rang,
       estRecurrent: estRecurrent ?? this.estRecurrent,
       livraisonsTotal: livraisonsTotal ?? this.livraisonsTotal,

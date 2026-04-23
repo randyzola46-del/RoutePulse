@@ -4,7 +4,7 @@ import '../theme/app_theme.dart';
 
 class ClientFormSheet extends StatefulWidget {
   final Client? client;
-  final Function(String prenom, String nom, String adresse, String? notes) onSubmit;
+  final Function(String prenom, String nom, String adresse, String? phone, String? notes) onSubmit;
 
   const ClientFormSheet({
     super.key,
@@ -21,6 +21,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
   final _prenomCtrl = TextEditingController();
   final _nomCtrl = TextEditingController();
   final _adresseCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   bool _isSubmitting = false;
@@ -32,6 +33,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
       _prenomCtrl.text = widget.client!.prenom;
       _nomCtrl.text = widget.client!.nom;
       _adresseCtrl.text = widget.client!.adresse;
+      _phoneCtrl.text = widget.client!.phone ?? '';
       _notesCtrl.text = widget.client!.notes ?? '';
     }
   }
@@ -41,6 +43,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
     _prenomCtrl.dispose();
     _nomCtrl.dispose();
     _adresseCtrl.dispose();
+    _phoneCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -56,6 +59,7 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
         _prenomCtrl.text.trim(),
         _nomCtrl.text.trim(),
         _adresseCtrl.text.trim(),
+        _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
         _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       if (mounted) Navigator.pop(context);
@@ -152,6 +156,14 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
               const SizedBox(height: 12),
 
               _buildField(
+                controller: _phoneCtrl,
+                label: 'Téléphone',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+
+              _buildField(
                 controller: _notesCtrl,
                 label: 'Notes (optionnel)',
                 icon: Icons.notes_outlined,
@@ -211,12 +223,14 @@ class _ClientFormSheetState extends State<ClientFormSheet> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    TextInputType? keyboardType,
     String? Function(String?)? validator,
     int maxLines = 1,
   }) {
     return TextFormField(
       controller: controller,
       validator: validator,
+      keyboardType: keyboardType,
       maxLines: maxLines,
       style: const TextStyle(
         color: AppColors.textPrimary,

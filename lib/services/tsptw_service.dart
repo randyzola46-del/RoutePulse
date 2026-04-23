@@ -1,3 +1,4 @@
+// lib/services/tsptw_service.dart
 import 'dart:math';
 import '../models/livraison.dart';
 
@@ -65,10 +66,10 @@ class ArrivalInfo {
 
 class TsptwService {
   static const double _avgSpeedKmH = 25.0;
-  static const double _distancePenaltyWeight = 0.8; // 🔥 Augmenté de 0.4 à 0.8
+  static const double _distancePenaltyWeight = 0.8;
   static const double _earlyArrivalPenalty = 1.5;
   static const double _lateArrivalPenalty = 10.0;
-  static const double _maxReasonableDistanceKm = 80.0; // Distance max raisonnable
+  static const double _maxReasonableDistanceKm = 80.0;
 
   // Haversine distance en km
   static double haversine(LatLng a, LatLng b) {
@@ -85,7 +86,6 @@ class TsptwService {
   static double _travelMin(LatLng from, LatLng to) =>
       (haversine(from, to) / _avgSpeedKmH) * 60;
 
-  /// Vérifie si une distance est raisonnable (évite les bonds aberrants)
   static bool isReasonableDistance(LatLng a, LatLng b, {double maxKm = _maxReasonableDistanceKm}) {
     final dist = haversine(a, b);
     return dist <= maxKm;
@@ -125,7 +125,6 @@ class TsptwService {
         final arrival = currentTime + travel;
         final distance = haversine(currentPos, stops[j].position);
 
-        // Score = pénalité temporelle + distance × poids renforcé
         final score = _penalty(stops[j], arrival) + distance * _distancePenaltyWeight;
 
         if (score < bestScore) {
@@ -134,14 +133,13 @@ class TsptwService {
         }
       }
 
-      if (best == -1) break; // Sécurité
+      if (best == -1) break;
 
       visited[best] = true;
       tour.add(best);
       final travel = _travelMin(currentPos, stops[best].position);
       currentTime += travel;
 
-      // Attente si on arrive avant l'ouverture du créneau
       if (currentTime < stops[best].windowStart) {
         currentTime = stops[best].windowStart.toDouble();
       }
@@ -167,7 +165,6 @@ class TsptwService {
 
       for (int i = 0; i < best.length - 2; i++) {
         for (int j = i + 2; j < best.length; j++) {
-          // Éviter les inversions qui créent des bonds géographiques
           if (j - i <= 1) continue;
 
           final posPrev = i == 0 ? origin : stops[best[i - 1]].position;
@@ -175,27 +172,22 @@ class TsptwService {
           final posJ = stops[best[j]].position;
           final posNextJ = j + 1 < best.length ? stops[best[j + 1]].position : null;
 
-          // Distance avant inversion
           double costBefore = haversine(posPrev, posI);
           costBefore += haversine(posJ, posNextJ ?? posJ);
 
-          // Distance après inversion (i ↔ j)
           double costAfter = haversine(posPrev, posJ);
           costAfter += haversine(posI, posNextJ ?? posI);
 
-          // Vérifier que l'inversion ne crée pas un bond aberrant
           final directJump = haversine(posI, posJ);
           if (directJump > _maxReasonableDistanceKm) continue;
 
           if (costAfter < costBefore - 0.05) {
-            // Inverser le segment [i, j]
             final newTour = List<int>.from(best);
             final reversed = best.sublist(i, j + 1).reversed.toList();
             for (int k = 0; k < reversed.length; k++) {
               newTour[i + k] = reversed[k];
             }
 
-            // Vérifier la validité temporelle
             final evalNew = _evaluate(newTour, stops, origin, 8 * 60);
             final evalOld = _evaluate(best, stops, origin, 8 * 60);
 
@@ -284,11 +276,9 @@ class TsptwService {
 
     print('📍 Optimisation TSPTW avec ${stops.length} arrêts');
 
-    // Phase 1: Nearest Neighbor
     final nnTour = _nearestNeighbor(stops, origin, startMin);
     print('  → Tournée initiale: ${nnTour.length} arrêts');
 
-    // Phase 2: 2-opt
     final optimizedTour = _twoOpt(nnTour, stops, origin);
     print('  → Tournée optimisée: ${optimizedTour.length} arrêts');
 
@@ -298,19 +288,111 @@ class TsptwService {
     return result;
   }
 
-  /// Parse un créneau string "08h–10h" ou "08:00–10:00" → [startMin, endMin]
+  /// ✅ CORRECTION : Parse un créneau string avec gestion de multiples formats
+  /// Formats supportés :
+  /// - "08h–10h" ou "08h-10h"
+  /// - "08:00–10:00" ou "08:00-10:00"
+  /// - "08:00 - 10:00" (avec espaces)
+  /// - "8h00–18h00" etc.
   static (int, int) parseCreneau(String creneau) {
     try {
-      final clean = creneau.replaceAll('h', ':00').replaceAll(' ', '');
-      final parts = clean.split('–');
-      if (parts.length != 2) return (8 * 60, 18 * 60);
+      String clean = creneau.trim();
+
+      // Remplacer tous les types de tirets par un tiret standard
+      clean = clean.replaceAll('–', '-');
+      clean = clean.replaceAll('—', '-');
+      clean = clean.replaceAll('−', '-');
+
+      // Remplacer 'h' par ':' (pour les formats "08h00" → "08:00")
+      // Gère "08h", "08h00", "8h", "8h00"
+      if (clean.contains('h')) {
+        final hIndex = clean.indexOf('h');
+        if (hIndex >= 0) {
+          // Vérifier si après le 'h' il y a des chiffres (minutes)
+          String beforeH = clean.substring(0, hIndex);
+          String afterH = '';
+          if (hIndex + 1 < clean.length) {
+            afterH = clean.substring(hIndex + 1);
+          }
+
+          // Extraire les minutes (les chiffres qui suivent 'h')
+          String minutes = '';
+          for (int i = 0; i < afterH.length; i++) {
+            final char = afterH[i];
+            if (char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57) {
+              minutes += char;
+            } else {
+              break;
+            }
+          }
+
+          // Formatter l'heure: HH:MM
+          String hourStr = beforeH;
+          if (hourStr.length == 1) hourStr = '0$hourStr';
+
+          String minuteStr = minutes;
+          if (minuteStr.isEmpty) minuteStr = '00';
+          if (minuteStr.length == 1) minuteStr = '0$minuteStr';
+
+          // Remplacer "08h00" par "08:00"
+          clean = clean.replaceRange(0, clean.length,
+              clean.replaceFirst(RegExp(r'\d+h\d*'), '$hourStr:$minuteStr'));
+        }
+      }
+
+      // Supprimer les espaces autour du séparateur
+      clean = clean.replaceAll(' ', '');
+
+      // Split sur le tiret
+      final parts = clean.split('-');
+      if (parts.length != 2) {
+        print('⚠️ parseCreneau: format invalide pour "$creneau", fallback 8h-18h');
+        return (8 * 60, 18 * 60);
+      }
 
       int parseTime(String t) {
-        final tp = t.split(':');
-        return int.parse(tp[0]) * 60 + (tp.length > 1 ? int.parse(tp[1]) : 0);
+        // Nettoyer la chaîne
+        String timeStr = t.trim();
+
+        // Si c'est un format "HH:MM"
+        if (timeStr.contains(':')) {
+          final tp = timeStr.split(':');
+          int hour = int.parse(tp[0]);
+          int minute = tp.length > 1 ? int.parse(tp[1]) : 0;
+          return hour * 60 + minute;
+        }
+
+        // Si c'est un format "HHMM" (ex: 0800)
+        if (timeStr.length == 4) {
+          int hour = int.parse(timeStr.substring(0, 2));
+          int minute = int.parse(timeStr.substring(2, 4));
+          return hour * 60 + minute;
+        }
+
+        // Sinon, essayer de parser comme heure simple
+        int hour = int.parse(timeStr);
+        return hour * 60;
       }
-      return (parseTime(parts[0]), parseTime(parts[1]));
-    } catch (_) {
+
+      final start = parseTime(parts[0]);
+      final end = parseTime(parts[1]);
+
+      // Validation: l'heure de fin doit être après l'heure de début
+      if (end <= start) {
+        print('⚠️ parseCreneau: heure de fin ($end) <= heure de début ($start) pour "$creneau", ajustement +1h');
+        return (start, start + 60);
+      }
+
+      final startHour = start ~/ 60;
+      final startMin = (start % 60).toString().padLeft(2, '0');
+      final endHour = end ~/ 60;
+      final endMin = (end % 60).toString().padLeft(2, '0');
+
+      print('✅ parseCreneau: "$creneau" → ${startHour}h$startMin - ${endHour}h$endMin');
+
+      return (start, end);
+    } catch (e) {
+      print('❌ parseCreneau error: "$creneau" → $e');
       return (8 * 60, 18 * 60);
     }
   }

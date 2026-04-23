@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/livraison.dart';
-import '../models/vehicule.dart';
 import '../models/client.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
-import '../viewmodels/vehicules_viewmodel.dart';
 import '../viewmodels/clients_viewmodel.dart';
 
 // ========== EXTENSIONS ==========
@@ -93,7 +91,7 @@ class _StatsViewState extends ConsumerState<StatsView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this)
+    _tabController = TabController(length: 2, vsync: this)
       ..addListener(() => setState(() => _tabIndex = _tabController.index));
   }
 
@@ -110,18 +108,15 @@ class _StatsViewState extends ConsumerState<StatsView>
   static const _tabs = [
     (Icons.grid_view_rounded,    'Global'),
     (Icons.bolt_rounded,         'Perf.'),
-    (Icons.local_shipping_rounded, 'Véhic.'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final livState    = ref.watch(livraisonsViewModelProvider);
-    final vehState    = ref.watch(vehiculesViewModelProvider);
     final clientState = ref.watch(clientsViewModelProvider);
 
     final stats = PerformanceStats.calculer(
       livraisons: livState.livraisons,
-      vehicules:  vehState.vehicules,
       clients:    clientState.clients,
     );
 
@@ -140,7 +135,6 @@ class _StatsViewState extends ConsumerState<StatsView>
                 children: [
                   _VueGlobale(stats: stats),
                   _VuePerformance(stats: stats),
-                  _VueVehicules(stats: stats),
                 ],
               ),
             ),
@@ -163,7 +157,7 @@ class _StatsViewState extends ConsumerState<StatsView>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Statistiques',
-                    style: _DS.display(AppColors.textPrimary)),
+                    style: _DS.title(AppColors.textPrimary)),
                 const SizedBox(height: 4),
                 Text('Aperçu complet de vos performances',
                     style: _DS.body(AppColors.textMuted)),
@@ -341,37 +335,12 @@ class _VuePerformance extends StatelessWidget {
           const SizedBox(height: 16),
           _TimeMetricsCard(stats: stats),
           const SizedBox(height: 16),
-          _DistanceMetricsCard(stats: stats),
+          _TopClientsCard(stats: stats),
         ],
       ),
     );
   }
 }
-
-class _VueVehicules extends StatelessWidget {
-  final PerformanceStats stats;
-  const _VueVehicules({required this.stats});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 4),
-          _SectionHeader(label: 'Performance par véhicule', icon: Icons.local_shipping_rounded),
-          const SizedBox(height: 12),
-          if (stats.performanceVehicules.isEmpty)
-            _EmptyState(label: 'Aucun véhicule enregistré', icon: Icons.local_shipping_rounded)
-          else
-            ...stats.performanceVehicules.map((v) => _VehiculePerformanceCard(vehicule: v)),
-        ],
-      ),
-    );
-  }
-}
-
 
 // ========== COMPOSANTS RÉUTILISABLES ==========
 
@@ -1072,9 +1041,9 @@ class _TimeMetricsCard extends StatelessWidget {
   }
 }
 
-class _DistanceMetricsCard extends StatelessWidget {
+class _TopClientsCard extends StatelessWidget {
   final PerformanceStats stats;
-  const _DistanceMetricsCard({required this.stats});
+  const _TopClientsCard({required this.stats});
 
   @override
   Widget build(BuildContext context) {
@@ -1089,34 +1058,14 @@ class _DistanceMetricsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionHeader(
-              label: 'Métriques de distance', icon: Icons.route_rounded),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _StatTile(
-                  valeur: '${stats.distanceTotaleKm.toStringAsFixed(0)} km',
-                  label: 'Distance totale',
-                  couleur: AppColors.statusAttente,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatTile(
-                  valeur: '${stats.distanceMoyenneParLivraisonKm.toStringAsFixed(1)} km',
-                  label: 'Dist. moyenne',
-                  couleur: AppColors.statusAttente,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _StatTile(
-            valeur: '${stats.kmParVehiculeMoyen.toStringAsFixed(0)} km',
-            label: 'Km moyen / véhicule',
-            couleur: AppColors.coral,
-            fullWidth: true,
-          ),
+              label: 'Top clients', icon: Icons.people_rounded),
+          const SizedBox(height: 16),
+          if (stats.topClients.isEmpty)
+            const _EmptyState(label: 'Aucun client enregistré', icon: Icons.people_rounded)
+          else
+            ...stats.topClients.asMap().entries.map((entry) =>
+                _TopClientCard(client: entry.value, rank: entry.key + 1)
+            ),
         ],
       ),
     );
@@ -1172,165 +1121,6 @@ class _StatTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ========== CARD VÉHICULE ==========
-
-class _VehiculePerformanceCard extends StatelessWidget {
-  final VehiculeStat vehicule;
-  const _VehiculePerformanceCard({required this.vehicule});
-
-  @override
-  Widget build(BuildContext context) {
-    final dispo = vehicule.disponibilite == DisponibiliteVehicule.disponible;
-    final statusColor = dispo ? AppColors.statusLivree : AppColors.statusReporter;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: _DS.r20,
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Column(
-        children: [
-          // En-tête
-          Row(
-            children: [
-              // Avatar initiales
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.coral.withOpacity(0.12),
-                  borderRadius: _DS.r12,
-                ),
-                child: Center(
-                  child: Text(
-                    vehicule.immatriculation.length >= 2
-                        ? vehicule.immatriculation.substring(0, 2).toUpperCase()
-                        : vehicule.immatriculation.toUpperCase(),
-                    style: _DS.heading(AppColors.coral),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(vehicule.nom,
-                        style: _DS.heading(AppColors.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text(vehicule.immatriculation,
-                        style: _DS.caption(AppColors.textMuted)),
-                  ],
-                ),
-              ),
-              // Badge disponibilité
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: _DS.r8,
-                  border: Border.all(color: statusColor.withOpacity(0.25)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5, height: 5,
-                      decoration: BoxDecoration(
-                        color: statusColor, shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      dispo ? 'Disponible' : 'Indisponible',
-                      style: _DS.caption(statusColor),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Barre de succès
-          ClipRRect(
-            borderRadius: _DS.r8,
-            child: LinearProgressIndicator(
-              value: vehicule.tauxSucces.clamp(0.0, 1.0),
-              backgroundColor: Colors.white.withOpacity(0.06),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.statusLivree),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Stats
-          Row(
-            children: [
-              Expanded(
-                child: _MiniStat(
-                  icon: Icons.local_shipping_rounded,
-                  valeur: '${vehicule.livraisons}',
-                  label: 'Livraisons',
-                  couleur: AppColors.coral,
-                ),
-              ),
-              Expanded(
-                child: _MiniStat(
-                  icon: Icons.route_rounded,
-                  valeur: '${vehicule.km.toStringAsFixed(0)} km',
-                  label: 'Kilométrage',
-                  couleur: AppColors.statusCours,
-                ),
-              ),
-              Expanded(
-                child: _MiniStat(
-                  icon: Icons.check_circle_rounded,
-                  valeur: '${(vehicule.tauxSucces * 100).toStringAsFixed(0)}%',
-                  label: 'Succès',
-                  couleur: AppColors.statusLivree,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final IconData icon;
-  final String valeur;
-  final String label;
-  final Color couleur;
-  const _MiniStat({
-    required this.icon,
-    required this.valeur,
-    required this.label,
-    required this.couleur,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 16, color: couleur.withOpacity(0.7)),
-        const SizedBox(height: 4),
-        Text(valeur,
-            style: TextStyle(
-              color: couleur,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Nunito',
-            )),
-        const SizedBox(height: 2),
-        Text(label, style: _DS.caption(AppColors.textMuted)),
-      ],
     );
   }
 }
@@ -1464,7 +1254,7 @@ class _TopClientCard extends StatelessWidget {
   }
 }
 
-// ========== MODÈLE DE DONNÉES (inchangé) ==========
+// ========== MODÈLE DE DONNÉES ==========
 
 class PerformanceStats {
   final int totalLivraisons;
@@ -1476,12 +1266,8 @@ class PerformanceStats {
   final double tauxReussite;
   final double tauxRetard;
   final double tempsMoyenLivraisonMin;
-  final double distanceTotaleKm;
-  final double distanceMoyenneParLivraisonKm;
-  final double kmParVehiculeMoyen;
   final List<DailyStat> livraisonsParJour;
   final List<StatutDistribution> distributionParStatut;
-  final List<VehiculeStat> performanceVehicules;
   final List<ClientStat> topClients;
   final List<PerformanceJournaliere> performanceJournaliere;
 
@@ -1495,19 +1281,14 @@ class PerformanceStats {
     required this.tauxReussite,
     required this.tauxRetard,
     required this.tempsMoyenLivraisonMin,
-    required this.distanceTotaleKm,
-    required this.distanceMoyenneParLivraisonKm,
-    required this.kmParVehiculeMoyen,
     required this.livraisonsParJour,
     required this.distributionParStatut,
-    required this.performanceVehicules,
     required this.topClients,
     required this.performanceJournaliere,
   });
 
   factory PerformanceStats.calculer({
     required List<Livraison> livraisons,
-    required List<Vehicule> vehicules,
     required List<Client> clients,
   }) {
     final livrees  = livraisons.where((l) => l.statut == StatutLivraison.livree).length;
@@ -1526,9 +1307,6 @@ class PerformanceStats {
     final tauxReussite = total > 0 ? livrees / total : 0.0;
     final tauxRetard   = total > 0 ? retardees / total : 0.0;
 
-    final distanceTotale  = vehicules.fold(0.0, (s, v) => s + v.kmParcourus);
-    final distanceMoyenne = livrees > 0 ? distanceTotale / livrees : 0.0;
-
     final livraisonsParJour = <DailyStat>[];
     for (int i = 6; i >= 0; i--) {
       final date = DateTime.now().subtract(Duration(days: i));
@@ -1545,18 +1323,6 @@ class PerformanceStats {
       StatutDistribution(statut: 'Reportées',count: reportees, color: AppColors.statusReporter),
       StatutDistribution(statut: 'Annulées', count: annulees,  color: AppColors.statusAnnulee),
     ].where((s) => s.count > 0).toList();
-
-    final performanceVehicules = vehicules.map((v) {
-      final lv = livraisons.where((l) => l.vehiculeId == v.id).length;
-      final ts = lv > 0
-          ? livraisons.where((l) => l.vehiculeId == v.id && l.statut == StatutLivraison.livree).length / lv
-          : 0.0;
-      return VehiculeStat(
-        nom: v.nomComplet, immatriculation: v.immatriculation,
-        livraisons: lv, km: v.kmParcourus, tauxSucces: ts,
-        disponibilite: v.disponibilite,
-      );
-    }).toList();
 
     final topClients = clients.map((c) {
       final lc = livraisons.where((l) => l.clientId == c.id).length;
@@ -1595,12 +1361,8 @@ class PerformanceStats {
       tauxReussite: tauxReussite,
       tauxRetard: tauxRetard,
       tempsMoyenLivraisonMin: tempsMoyen,
-      distanceTotaleKm: distanceTotale,
-      distanceMoyenneParLivraisonKm: distanceMoyenne,
-      kmParVehiculeMoyen: vehicules.isNotEmpty ? distanceTotale / vehicules.length : 0.0,
       livraisonsParJour: livraisonsParJour,
       distributionParStatut: distributionParStatut,
-      performanceVehicules: performanceVehicules,
       topClients: topClients.take(5).toList(),
       performanceJournaliere: performanceJournaliere,
     );
@@ -1629,20 +1391,6 @@ class StatutDistribution {
   final int count;
   final Color color;
   StatutDistribution({required this.statut, required this.count, required this.color});
-}
-
-class VehiculeStat {
-  final String nom;
-  final String immatriculation;
-  final int livraisons;
-  final double km;
-  final double tauxSucces;
-  final DisponibiliteVehicule disponibilite;
-  VehiculeStat({
-    required this.nom, required this.immatriculation,
-    required this.livraisons, required this.km,
-    required this.tauxSucces, required this.disponibilite,
-  });
 }
 
 class ClientStat {

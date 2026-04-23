@@ -1,26 +1,34 @@
-// lib/services/database_service.dart
+// lib/services/encrypted_database_service.dart
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'encryption_service.dart';
+import '../models/user.dart';
 import '../models/client.dart';
 import '../models/livraison.dart';
 import '../models/vehicule.dart';
-import '../models/user.dart';
 import '../models/preuve_livraison.dart';
 
-class DatabaseService {
-  static final DatabaseService _instance = DatabaseService._internal();
+/// Version chiffrée du DatabaseService
+/// Toutes les données sensibles sont chiffrées avant insertion
+class EncryptedDatabaseService {
+  static final EncryptedDatabaseService _instance = EncryptedDatabaseService._internal();
+  factory EncryptedDatabaseService() => _instance;
+  EncryptedDatabaseService._internal();
+
   static Database? _database;
   static String? _currentUserId;
+  final EncryptionService _encryption = EncryptionService();
   final Uuid _uuid = const Uuid();
 
-  DatabaseService._internal();
+  // Champs sensibles par table
+  static const _clientSensitiveFields = ['prenom', 'nom', 'adresse', 'phone', 'notes'];
+  static const _livraisonSensitiveFields = ['nom_client', 'adresse', 'notes'];
+  static const _vehiculeSensitiveFields = ['immatriculation'];
+  static const _preuveSensitiveFields = ['commentaire'];
 
-  factory DatabaseService() => _instance;
-
-  // Récupérer l'ID de l'utilisateur courant
   Future<String?> getCurrentUserId() async {
     if (_currentUserId != null) return _currentUserId;
 
@@ -37,54 +45,37 @@ class DatabaseService {
     }
   }
 
-  // Définir l'utilisateur courant (appelé après connexion)
   void setCurrentUserId(String userId) {
     _currentUserId = userId;
   }
 
-  // Réinitialiser après déconnexion
   void clearCurrentUser() {
     _currentUserId = null;
   }
 
-  // Réinitialiser la base de données (force la réouverture)
   Future<void> resetDatabase() async {
     if (_database != null) {
       await _database!.close();
       _database = null;
     }
-    print('✅ Base de données réinitialisée');
-  }
-
-  // Forcer le changement d'utilisateur
-  Future<void> switchUser(String userId) async {
-    if (_currentUserId != userId) {
-      if (_database != null) {
-        await _database!.close();
-        _database = null;
-      }
-      _currentUserId = userId;
-      print('🔄 Changement d\'utilisateur vers: $userId');
-    }
   }
 
   Future<Database> get database async {
     if (_database != null) return _database!;
+    await _encryption.init();
     _database = await _initDatabase();
     return _database!;
   }
 
   Future<Database> _initDatabase() async {
     final userId = await getCurrentUserId();
-    // Base de données différente par utilisateur
-    final dbName = userId != null ? 'routepulse_$userId.db' : 'routepulse_temp.db';
+    final dbName = userId != null ? 'routepulse_encrypted_$userId.db' : 'routepulse_encrypted_temp.db';
     String path = join(await getDatabasesPath(), dbName);
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 1,
       onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
     );
   }
 
@@ -186,7 +177,7 @@ class DatabaseService {
       )
     ''');
 
-    // Table des preuves de livraison
+    // Table des preuves
     await db.execute('''
       CREATE TABLE preuves_livraison (
         id TEXT PRIMARY KEY,
@@ -200,158 +191,37 @@ class DatabaseService {
       )
     ''');
 
-    // Création des index
+    // Index
     await db.execute('CREATE INDEX idx_livraisons_client ON livraisons(client_id)');
     await db.execute('CREATE INDEX idx_livraisons_statut ON livraisons(statut)');
-    await db.execute('CREATE INDEX idx_livraisons_vehicule ON livraisons(vehicule_id)');
     await db.execute('CREATE INDEX idx_historique_client ON historique(client_id)');
-    await db.execute('CREATE INDEX idx_preuves_livraison ON preuves_livraison(livraison_id)');
 
-    print('✅ Base de données créée avec succès');
+    print('✅ Base de données chiffrée créée');
 
-    // Ajouter des véhicules de démonstration
-    await insertDemoVehicules(db);
+    // Insérer véhicules démo
+    await _insertDemoVehicules(db);
   }
 
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE clients ADD COLUMN notes TEXT');
-    }
-    if (oldVersion < 3) {
-      // Migrations supplémentaires si nécessaires
-    }
-    if (oldVersion < 4) {
-      // Ajout de la table preuves_livraison
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS preuves_livraison (
-          id TEXT PRIMARY KEY,
-          livraison_id TEXT NOT NULL,
-          timestamp TEXT NOT NULL,
-          photo_path TEXT,
-          signature TEXT,
-          nb_colis_verifies INTEGER NOT NULL,
-          commentaire TEXT,
-          FOREIGN KEY (livraison_id) REFERENCES livraisons (id) ON DELETE CASCADE
-        )
-      ''');
-      await db.execute('CREATE INDEX IF NOT EXISTS idx_preuves_livraison ON preuves_livraison(livraison_id)');
-    }
-    if (oldVersion < 5) {
-      // Ajout du champ phone dans la table clients
-      try {
-        await db.execute('ALTER TABLE clients ADD COLUMN phone TEXT');
-        print('✅ Colonne phone ajoutée à la table clients');
-      } catch (e) {
-        print('⚠️ Migration phone: $e');
-      }
-    }
-  }
-
-  Future<void> insertDemoVehicules(Database db) async {
-    print('🚗 Insertion des véhicules de démonstration...');
-
+  Future<void> _insertDemoVehicules(Database db) async {
     final now = DateTime.now().toIso8601String();
 
     final demoVehicules = [
-      {
-        'id': _uuid.v4(),
-        'marque': 'Yamaha',
-        'modele': 'NMAX 125',
-        'immatriculation': 'AB-123-CD',
-        'type': 'Moto',
-        'charge_max_kg': 150,
-        'volume_m3': 0.5,
-        'annee': 2023,
-        'disponibilite': 'disponible',
-        'livraisons_total': 45,
-        'livraisons_mois': 8,
-        'km_parcourus': 12500.0,
-        'jours_entretien': 45,
-        'date_ajout': now,
-      },
-      {
-        'id': _uuid.v4(),
-        'marque': 'Renault',
-        'modele': 'Clio V',
-        'immatriculation': 'CD-456-EF',
-        'type': 'Voiture',
-        'charge_max_kg': 450,
-        'volume_m3': 3.2,
-        'annee': 2022,
-        'disponibilite': 'indisponible',
-        'livraisons_total': 128,
-        'livraisons_mois': 22,
-        'km_parcourus': 45200.0,
-        'jours_entretien': 12,
-        'date_ajout': now,
-      },
-      {
-        'id': _uuid.v4(),
-        'marque': 'Citroën',
-        'modele': 'Jumper',
-        'immatriculation': 'EF-789-GH',
-        'type': 'Fourgon',
-        'charge_max_kg': 1500,
-        'volume_m3': 12.5,
-        'annee': 2021,
-        'disponibilite': 'indisponible',
-        'livraisons_total': 89,
-        'livraisons_mois': 5,
-        'km_parcourus': 78300.0,
-        'jours_entretien': 3,
-        'date_ajout': now,
-      },
-      {
-        'id': _uuid.v4(),
-        'marque': 'Peugeot',
-        'modele': 'Partner',
-        'immatriculation': 'GH-012-IJ',
-        'type': 'Fourgon',
-        'charge_max_kg': 800,
-        'volume_m3': 4.5,
-        'annee': 2023,
-        'disponibilite': 'indisponible',
-        'livraisons_total': 234,
-        'livraisons_mois': 31,
-        'km_parcourus': 34200.0,
-        'jours_entretien': 60,
-        'date_ajout': now,
-      },
+      {'id': _uuid.v4(), 'marque': 'Yamaha', 'modele': 'NMAX 125', 'immatriculation': _encryption.encryptString('AB-123-CD'), 'type': 'Moto', 'charge_max_kg': 150, 'volume_m3': 0.5, 'annee': 2023, 'disponibilite': 'disponible', 'livraisons_total': 45, 'livraisons_mois': 8, 'km_parcourus': 12500.0, 'jours_entretien': 45, 'date_ajout': now},
+      {'id': _uuid.v4(), 'marque': 'Renault', 'modele': 'Clio V', 'immatriculation': _encryption.encryptString('CD-456-EF'), 'type': 'Voiture', 'charge_max_kg': 450, 'volume_m3': 3.2, 'annee': 2022, 'disponibilite': 'indisponible', 'livraisons_total': 128, 'livraisons_mois': 22, 'km_parcourus': 45200.0, 'jours_entretien': 12, 'date_ajout': now},
+      {'id': _uuid.v4(), 'marque': 'Citroën', 'modele': 'Jumper', 'immatriculation': _encryption.encryptString('EF-789-GH'), 'type': 'Fourgon', 'charge_max_kg': 1500, 'volume_m3': 12.5, 'annee': 2021, 'disponibilite': 'indisponible', 'livraisons_total': 89, 'livraisons_mois': 5, 'km_parcourus': 78300.0, 'jours_entretien': 3, 'date_ajout': now},
+      {'id': _uuid.v4(), 'marque': 'Peugeot', 'modele': 'Partner', 'immatriculation': _encryption.encryptString('GH-012-IJ'), 'type': 'Fourgon', 'charge_max_kg': 800, 'volume_m3': 4.5, 'annee': 2023, 'disponibilite': 'indisponible', 'livraisons_total': 234, 'livraisons_mois': 31, 'km_parcourus': 34200.0, 'jours_entretien': 60, 'date_ajout': now},
     ];
 
     for (final v in demoVehicules) {
       await db.insert('vehicules', v, conflictAlgorithm: ConflictAlgorithm.replace);
     }
-
-    print('✅ ${demoVehicules.length} véhicules de démonstration ajoutés');
   }
 
-  // ========== Gestion des utilisateurs ==========
+  // ========== Gestion utilisateurs ==========
 
   Future<void> insertUser(User user) async {
     final db = await database;
     await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<User?> getUserByEmail(String email) async {
-    final db = await database;
-    final result = await db.query(
-      'users',
-      where: 'email = ?',
-      whereArgs: [email.toLowerCase()],
-    );
-    if (result.isEmpty) return null;
-    return User.fromMap(result.first);
-  }
-
-  Future<bool> userExists(String email) async {
-    final db = await database;
-    final result = await db.query(
-      'users',
-      where: 'email = ?',
-      whereArgs: [email.toLowerCase()],
-    );
-    return result.isNotEmpty;
   }
 
   // ========== CRUD Clients ==========
@@ -359,24 +229,30 @@ class DatabaseService {
   Future<List<Client>> getAllClients() async {
     final db = await database;
     final result = await db.query('clients', orderBy: 'nom ASC');
-    return result.map((map) => Client.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, _clientSensitiveFields);
+      return Client.fromMap(decrypted);
+    }).toList();
   }
 
   Future<Client?> getClient(String id) async {
     final db = await database;
     final result = await db.query('clients', where: 'id = ?', whereArgs: [id]);
     if (result.isEmpty) return null;
-    return Client.fromMap(result.first);
+    final decrypted = _encryption.decryptMap(result.first, _clientSensitiveFields);
+    return Client.fromMap(decrypted);
   }
 
   Future<void> insertClient(Client client) async {
     final db = await database;
-    await db.insert('clients', client.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final encryptedMap = _encryption.encryptMap(client.toMap(), _clientSensitiveFields);
+    await db.insert('clients', encryptedMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> updateClient(Client client) async {
     final db = await database;
-    await db.update('clients', client.toMap(), where: 'id = ?', whereArgs: [client.id]);
+    final encryptedMap = _encryption.encryptMap(client.toMap(), _clientSensitiveFields);
+    await db.update('clients', encryptedMap, where: 'id = ?', whereArgs: [client.id]);
   }
 
   Future<void> deleteClient(String id) async {
@@ -389,7 +265,10 @@ class DatabaseService {
   Future<List<Livraison>> getAllLivraisons() async {
     final db = await database;
     final result = await db.query('livraisons', orderBy: 'date_creation DESC');
-    return result.map((map) => Livraison.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, _livraisonSensitiveFields);
+      return Livraison.fromMap(decrypted);
+    }).toList();
   }
 
   Future<List<Livraison>> getLivraisonsByClient(String clientId) async {
@@ -400,7 +279,10 @@ class DatabaseService {
       whereArgs: [clientId],
       orderBy: 'date_creation DESC',
     );
-    return result.map((map) => Livraison.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, _livraisonSensitiveFields);
+      return Livraison.fromMap(decrypted);
+    }).toList();
   }
 
   Future<List<Livraison>> getLivraisonsByStatut(StatutLivraison statut) async {
@@ -411,24 +293,30 @@ class DatabaseService {
       whereArgs: [statut.toJson],
       orderBy: 'date_creation DESC',
     );
-    return result.map((map) => Livraison.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, _livraisonSensitiveFields);
+      return Livraison.fromMap(decrypted);
+    }).toList();
   }
 
   Future<Livraison?> getLivraison(String id) async {
     final db = await database;
     final result = await db.query('livraisons', where: 'id = ?', whereArgs: [id]);
     if (result.isEmpty) return null;
-    return Livraison.fromMap(result.first);
+    final decrypted = _encryption.decryptMap(result.first, _livraisonSensitiveFields);
+    return Livraison.fromMap(decrypted);
   }
 
   Future<void> insertLivraison(Livraison livraison) async {
     final db = await database;
-    await db.insert('livraisons', livraison.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final encryptedMap = _encryption.encryptMap(livraison.toMap(), _livraisonSensitiveFields);
+    await db.insert('livraisons', encryptedMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> updateLivraison(Livraison livraison) async {
     final db = await database;
-    await db.update('livraisons', livraison.toMap(), where: 'id = ?', whereArgs: [livraison.id]);
+    final encryptedMap = _encryption.encryptMap(livraison.toMap(), _livraisonSensitiveFields);
+    await db.update('livraisons', encryptedMap, where: 'id = ?', whereArgs: [livraison.id]);
   }
 
   Future<void> deleteLivraison(String id) async {
@@ -441,24 +329,30 @@ class DatabaseService {
   Future<List<Vehicule>> getAllVehicules() async {
     final db = await database;
     final result = await db.query('vehicules', orderBy: 'marque ASC');
-    return result.map((map) => Vehicule.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, _vehiculeSensitiveFields);
+      return Vehicule.fromMap(decrypted);
+    }).toList();
   }
 
   Future<Vehicule?> getVehicule(String id) async {
     final db = await database;
     final result = await db.query('vehicules', where: 'id = ?', whereArgs: [id]);
     if (result.isEmpty) return null;
-    return Vehicule.fromMap(result.first);
+    final decrypted = _encryption.decryptMap(result.first, _vehiculeSensitiveFields);
+    return Vehicule.fromMap(decrypted);
   }
 
   Future<void> insertVehicule(Vehicule vehicule) async {
     final db = await database;
-    await db.insert('vehicules', vehicule.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final encryptedMap = _encryption.encryptMap(vehicule.toMap(), _vehiculeSensitiveFields);
+    await db.insert('vehicules', encryptedMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> updateVehicule(Vehicule vehicule) async {
     final db = await database;
-    await db.update('vehicules', vehicule.toMap(), where: 'id = ?', whereArgs: [vehicule.id]);
+    final encryptedMap = _encryption.encryptMap(vehicule.toMap(), _vehiculeSensitiveFields);
+    await db.update('vehicules', encryptedMap, where: 'id = ?', whereArgs: [vehicule.id]);
   }
 
   Future<void> deleteVehicule(String id) async {
@@ -477,12 +371,16 @@ class DatabaseService {
       whereArgs: [clientId],
       orderBy: 'date DESC',
     );
-    return result.map((map) => HistoriqueLivraison.fromMap(map)).toList();
+    return result.map((map) {
+      final decrypted = _encryption.decryptMap(map, ['adresse']);
+      return HistoriqueLivraison.fromMap(decrypted);
+    }).toList();
   }
 
   Future<void> insertHistorique(HistoriqueLivraison historique) async {
     final db = await database;
-    await db.insert('historique', historique.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final encryptedMap = _encryption.encryptMap(historique.toMap(), ['adresse']);
+    await db.insert('historique', encryptedMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ========== CRUD Entretiens ==========
@@ -493,27 +391,12 @@ class DatabaseService {
     return result.map((map) => EntretienItem.fromMap(map)).toList();
   }
 
-  Future<void> insertEntretien(EntretienItem entretien) async {
-    final db = await database;
-    await db.insert('entretiens', entretien.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> updateEntretien(EntretienItem entretien) async {
-    final db = await database;
-    await db.update('entretiens', entretien.toMap(), where: 'id = ?', whereArgs: [entretien.id]);
-  }
-
-  Future<void> deleteEntretien(String id) async {
-    final db = await database;
-    await db.delete('entretiens', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // ========== CRUD Preuves de livraison ==========
+  // ========== CRUD Preuves ==========
 
   Future<void> insertPreuve(PreuveLivraison preuve) async {
     final db = await database;
-    await db.insert('preuves_livraison', preuve.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    final encryptedMap = _encryption.encryptMap(preuve.toMap(), _preuveSensitiveFields);
+    await db.insert('preuves_livraison', encryptedMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<PreuveLivraison?> getPreuveByLivraison(String livraisonId) async {
@@ -524,64 +407,12 @@ class DatabaseService {
       whereArgs: [livraisonId],
     );
     if (result.isEmpty) return null;
-    return PreuveLivraison.fromMap(result.first);
+    final decrypted = _encryption.decryptMap(result.first, _preuveSensitiveFields);
+    return PreuveLivraison.fromMap(decrypted);
   }
 
-  Future<List<PreuveLivraison>> getPreuvesByClient(String clientId) async {
-    final db = await database;
-    final result = await db.rawQuery('''
-      SELECT p.* FROM preuves_livraison p
-      JOIN livraisons l ON p.livraison_id = l.id
-      WHERE l.client_id = ?
-      ORDER BY p.timestamp DESC
-    ''', [clientId]);
-    return result.map((map) => PreuveLivraison.fromMap(map)).toList();
-  }
+  // ========== Statistiques ==========
 
-  Future<List<PreuveLivraison>> getAllPreuves() async {
-    final db = await database;
-    final result = await db.query('preuves_livraison', orderBy: 'timestamp DESC');
-    return result.map((map) => PreuveLivraison.fromMap(map)).toList();
-  }
-
-  Future<void> deletePreuve(String id) async {
-    final db = await database;
-    await db.delete('preuves_livraison', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // ========== Méthodes utilitaires ==========
-
-  // Réinitialiser la base de données de l'utilisateur courant
-  Future<void> resetCurrentUserDatabase() async {
-    final userId = await getCurrentUserId();
-    if (userId == null) return;
-
-    final db = await database;
-    await db.close();
-
-    String path = join(await getDatabasesPath(), 'routepulse_$userId.db');
-    await deleteDatabase(path);
-    _database = null;
-
-    print('✅ Base de données réinitialisée pour l\'utilisateur: $userId');
-  }
-
-  // Supprimer toutes les données de l'utilisateur courant
-  Future<void> deleteAllUserData() async {
-    final db = await database;
-
-    // Supprimer toutes les données dans le bon ordre (respect des clés étrangères)
-    await db.delete('preuves_livraison');
-    await db.delete('entretiens');
-    await db.delete('historique');
-    await db.delete('livraisons');
-    await db.delete('vehicules');
-    await db.delete('clients');
-
-    print('✅ Toutes les données utilisateur supprimées');
-  }
-
-  // Obtenir les statistiques de l'utilisateur
   Future<Map<String, dynamic>> getUserStats() async {
     final db = await database;
 
@@ -601,17 +432,24 @@ class DatabaseService {
         await db.rawQuery('SELECT COUNT(*) FROM livraisons WHERE statut = "livree"')
     ) ?? 0;
 
-    final preuvesCount = Sqflite.firstIntValue(
-        await db.rawQuery('SELECT COUNT(*) FROM preuves_livraison')
-    ) ?? 0;
-
     return {
       'clients': clientsCount,
       'livraisons': livraisonsCount,
       'vehicules': vehiculesCount,
       'livraisons_livrees': livraisonsLivrees,
-      'preuves': preuvesCount,
       'taux_reussite': livraisonsCount > 0 ? livraisonsLivrees / livraisonsCount : 0.0,
     };
+  }
+
+  // ========== Utilitaires ==========
+
+  Future<void> deleteAllUserData() async {
+    final db = await database;
+    await db.delete('preuves_livraison');
+    await db.delete('entretiens');
+    await db.delete('historique');
+    await db.delete('livraisons');
+    await db.delete('vehicules');
+    await db.delete('clients');
   }
 }

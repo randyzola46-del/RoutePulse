@@ -24,7 +24,7 @@ extension DisponibiliteVehiculeX on DisponibiliteVehicule {
   }
 }
 
-// ✅ Fonction statique pour convertir du JSON
+//Fonction statique pour convertir du JSON
 DisponibiliteVehicule disponibiliteVehiculeFromJson(String value) {
   return value == 'disponible'
       ? DisponibiliteVehicule.disponible
@@ -47,7 +47,7 @@ extension EntretienUrgenceX on EntretienUrgence {
     }
   }
 
-  // ✅ Ajout du getter tinte (fond avec opacité)
+  //Ajout du getter tinte (fond avec opacité)
   Color get tinte {
     switch (this) {
       case EntretienUrgence.rouge:
@@ -59,7 +59,7 @@ extension EntretienUrgenceX on EntretienUrgence {
     }
   }
 
-  // ✅ Ajout du getter icone
+  //Ajout du getter icone
   IconData get icone {
     switch (this) {
       case EntretienUrgence.rouge:

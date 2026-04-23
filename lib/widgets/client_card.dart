@@ -1,4 +1,3 @@
-// lib/widgets/client_card.dart
 import 'package:flutter/material.dart';
 import '../models/client.dart';
 import '../theme/app_theme.dart';
@@ -49,7 +48,6 @@ class ClientCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // Icône circulaire simple
                   Container(
                     width: 48,
                     height: 48,
@@ -69,7 +67,6 @@ class ClientCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Infos client
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,10 +90,26 @@ class ClientCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (client.phone != null && client.phone!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.phone, size: 12, color: AppColors.statusLivree),
+                              const SizedBox(width: 4),
+                              Text(
+                                client.phone!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.statusLivree,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  // Menu déroulant pour les actions
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     color: AppColors.surface,
@@ -150,13 +163,12 @@ class ClientCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // Badges en ligne simple
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
                   _buildBadge(client.rang.label, rangColor),
-                  _buildBadge('${client.livraisonsTotal} livr.', Colors.blue),
+                  _buildBadge('${client.livraisonsTotal} livr.', AppColors.coral),
                 ],
               ),
             ],

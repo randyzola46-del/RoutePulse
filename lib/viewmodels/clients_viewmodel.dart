@@ -1,7 +1,9 @@
+// lib/viewmodels/clients_viewmodel.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/client.dart';
-import '../services/database_service.dart';
+import '../services/app_database_service.dart';  // ✅ CHANGÉ
+import 'auth_viewmodel.dart';
 
 enum FiltreClients { tous, gold, silver, bronze, recurrents, nouveaux }
 
@@ -11,6 +13,7 @@ class ClientsState {
   final FiltreClients filtre;
   final bool isLoading;
   final String? error;
+  final String? currentUserId;
 
   const ClientsState({
     this.clients = const [],
@@ -18,6 +21,7 @@ class ClientsState {
     this.filtre = FiltreClients.tous,
     this.isLoading = false,
     this.error,
+    this.currentUserId,
   });
 
   List<Client> get clientsFiltres {
@@ -64,14 +68,10 @@ class ClientsState {
 
   int _rangPriority(RangClient rang) {
     switch (rang) {
-      case RangClient.gold:
-        return 0;
-      case RangClient.silver:
-        return 1;
-      case RangClient.bronze:
-        return 2;
-      case RangClient.standard:
-        return 3;
+      case RangClient.gold: return 0;
+      case RangClient.silver: return 1;
+      case RangClient.bronze: return 2;
+      case RangClient.standard: return 3;
     }
   }
 
@@ -102,6 +102,7 @@ class ClientsState {
     FiltreClients? filtre,
     bool? isLoading,
     String? error,
+    String? currentUserId,
   }) {
     return ClientsState(
       clients: clients ?? this.clients,
@@ -109,24 +110,61 @@ class ClientsState {
       filtre: filtre ?? this.filtre,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
+      currentUserId: currentUserId ?? this.currentUserId,
     );
   }
 }
 
 class ClientsViewModel extends StateNotifier<ClientsState> {
-  final DatabaseService _db = DatabaseService();
+  final Ref _ref;
+  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
   final Uuid _uuid = const Uuid();
 
-  ClientsViewModel() : super(const ClientsState()) {
-    loadClients();
+  ClientsViewModel(this._ref) : super(const ClientsState()) {
+    _init();
+  }
+
+  Future<void> _init() async {
+    _ref.listen(authViewModelProvider, (previous, next) {
+      final previousUserId = previous?.user?.id;
+      final nextUserId = next?.user?.id;
+
+      if (previousUserId != nextUserId) {
+        print('🔄 Changement utilisateur détecté dans ClientsViewModel: $previousUserId → $nextUserId');
+        _onUserChanged(nextUserId);
+      }
+    });
+
+    final userId = await AppDatabaseService().getCurrentUserId();
+    if (userId != null) {
+      await loadClients();
+    }
+  }
+
+  Future<void> _onUserChanged(String? newUserId) async {
+    print('🔄 Réinitialisation des clients pour le nouvel utilisateur: $newUserId');
+
+    state = const ClientsState();
+
+    if (newUserId != null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      await loadClients();
+    }
   }
 
   Future<void> loadClients() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
+      final userId = await AppDatabaseService().getCurrentUserId();
       final clients = await _db.getAllClients();
-      state = state.copyWith(clients: clients, isLoading: false);
+      print('📦 Clients chargés pour user $userId : ${clients.length}');
+      state = state.copyWith(
+        clients: clients,
+        isLoading: false,
+        currentUserId: userId,
+      );
     } catch (e) {
+      print('❌ Erreur chargement clients: $e');
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
   }
@@ -138,6 +176,7 @@ class ClientsViewModel extends StateNotifier<ClientsState> {
     required String prenom,
     required String nom,
     required String adresse,
+    String? phone,
     String? notes,
   }) async {
     final nouveau = Client(
@@ -145,6 +184,7 @@ class ClientsViewModel extends StateNotifier<ClientsState> {
       prenom: prenom.trim(),
       nom: nom.trim(),
       adresse: adresse.trim(),
+      phone: phone,
       rang: RangClient.standard,
       estRecurrent: false,
       livraisonsTotal: 0,
@@ -169,5 +209,5 @@ class ClientsViewModel extends StateNotifier<ClientsState> {
 }
 
 final clientsViewModelProvider = StateNotifierProvider<ClientsViewModel, ClientsState>(
-      (_) => ClientsViewModel(),
+      (ref) => ClientsViewModel(ref),
 );

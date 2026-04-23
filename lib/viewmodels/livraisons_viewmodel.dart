@@ -1,9 +1,10 @@
+// lib/viewmodels/livraisons_viewmodel.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/client.dart';
 import '../models/livraison.dart';
 import '../models/vehicule.dart';
-import '../services/database_service.dart';
+import '../services/app_database_service.dart';  // ✅ CHANGÉ
 import 'clients_viewmodel.dart';
 import 'vehicules_viewmodel.dart';
 
@@ -64,20 +65,20 @@ class LivraisonsState {
 
   LivraisonsState copyWith({
     List<Livraison>? livraisons,
-    StatutLivraison? Function()? filtreStatut,
+    StatutLivraison? filtreStatut,
     String? recherche,
     bool? isLoading,
-    String? Function()? erreur,
+    String? erreur,
     TriLivraisons? tri,
     Set<String>? vehiculesAvecMissionActive,
     bool? isSubmitting,
   }) {
     return LivraisonsState(
       livraisons: livraisons ?? this.livraisons,
-      filtreStatut: filtreStatut != null ? filtreStatut() : this.filtreStatut,
+      filtreStatut: filtreStatut ?? this.filtreStatut,
       recherche: recherche ?? this.recherche,
       isLoading: isLoading ?? this.isLoading,
-      erreur: erreur != null ? erreur() : this.erreur,
+      erreur: erreur ?? this.erreur,
       tri: tri ?? this.tri,
       vehiculesAvecMissionActive: vehiculesAvecMissionActive ?? this.vehiculesAvecMissionActive,
       isSubmitting: isSubmitting ?? this.isSubmitting,
@@ -87,32 +88,90 @@ class LivraisonsState {
 
 class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
   final Ref _ref;
-  final DatabaseService _db = DatabaseService();
+  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
   final Uuid _uuid = const Uuid();
   final Map<String, List<String>> _livraisonsEnCoursParVehicule = {};
 
   bool _isAdding = false;
+  bool _isLoading = false;
+  DateTime _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 10));
+  List<Livraison> _lastLoadedLivraisons = [];
 
   LivraisonsViewModel(this._ref) : super(const LivraisonsState()) {
-    chargerLivraisons();
+    _initAvecUtilisateur();
+  }
+
+  Future<void> _initAvecUtilisateur() async {
+    if (_isLoading) return;
+    _isLoading = true;
+
+    final userId = await AppDatabaseService().getCurrentUserId();
+    if (userId != null) {
+      await chargerLivraisons();
+    }
+
+    _isLoading = false;
   }
 
   Future<void> chargerLivraisons() async {
-    if (state.isLoading) return;
+    if (_isLoading || state.isLoading) return;
 
+    final now = DateTime.now();
+    if (now.difference(_lastLoadTime) < const Duration(seconds: 2)) {
+      print('⏳ Chargement trop fréquent, ignoré');
+      return;
+    }
+    _lastLoadTime = now;
+
+    final userId = await AppDatabaseService().getCurrentUserId();
+    if (userId == null) {
+      print('⚠️ Aucun utilisateur connecté, chargement des livraisons ignoré');
+      return;
+    }
+
+    _isLoading = true;
     state = state.copyWith(isLoading: true);
+
     try {
       final livraisons = await _db.getAllLivraisons();
       print('📦 Livraisons chargées: ${livraisons.length}');
-      state = state.copyWith(livraisons: livraisons, isLoading: false);
+
+      if (_areLivraisonsEqual(_lastLoadedLivraisons, livraisons)) {
+        print('📦 Pas de changement, skip update');
+        state = state.copyWith(isLoading: false);
+        _isLoading = false;
+        return;
+      }
+
+      _lastLoadedLivraisons = List.from(livraisons);
+      state = state.copyWith(
+        livraisons: livraisons,
+        isLoading: false,
+        erreur: null,
+      );
       _reinitialiserMissionsEnCours();
     } catch (e) {
       print('❌ Erreur chargement livraisons: $e');
-      state = state.copyWith(erreur: () => e.toString(), isLoading: false);
+      state = state.copyWith(erreur: e.toString(), isLoading: false);
+    } finally {
+      _isLoading = false;
     }
   }
 
+  bool _areLivraisonsEqual(List<Livraison> a, List<Livraison> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].statut != b[i].statut ||
+          a[i].vehiculeId != b[i].vehiculeId) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> refresh() async {
+    if (_isLoading) return;
     await chargerLivraisons();
   }
 
@@ -228,16 +287,12 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
     state = state.copyWith(isSubmitting: true);
 
     print('➕ Ajout livraison: $nomClient');
-    print('  Adresse: $adresse');
-    print('  Créneau: $creneau');
-    print('  Colis: $nbColis, Poids: $poids kg');
 
     try {
       final client = await _getOrCreateClient(
         nomClient: nomClient,
         adresse: adresse,
       );
-      print('✅ Client OK: ${client.id} - ${client.nomComplet}');
 
       final nouvelle = Livraison(
         id: _uuid.v4(),
@@ -254,20 +309,19 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
       );
 
       await _db.insertLivraison(nouvelle);
-      print('✅ Livraison insérée en BDD: ${nouvelle.id}');
+      print('✅ Livraison insérée: ${nouvelle.id}');
 
       await _mettreAJourClientApresLivraison(client.id);
 
       final clientsVM = _ref.read(clientsViewModelProvider.notifier);
       await clientsVM.loadClients();
 
+      _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
       await chargerLivraisons();
-      print('📊 État final: ${state.livraisons.length} livraisons');
 
-    } catch (e, stackTrace) {
+    } catch (e) {
       print('❌ Erreur lors de l\'ajout: $e');
-      print('📚 StackTrace: $stackTrace');
-      state = state.copyWith(erreur: () => e.toString());
+      state = state.copyWith(erreur: e.toString());
     } finally {
       _isAdding = false;
       state = state.copyWith(isSubmitting: false);
@@ -277,6 +331,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
   Future<void> modifierLivraison(Livraison livraison) async {
     print('✏️ Modification livraison: ${livraison.id}');
     await _db.updateLivraison(livraison);
+    _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
     await chargerLivraisons();
   }
 
@@ -292,6 +347,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
       await _mettreAJourClientApresLivraison(livraison.clientId);
     }
 
+    _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
     await chargerLivraisons();
 
     if (vehiculeId == null) return;
@@ -301,6 +357,26 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
     } else if (ancienStatut == StatutLivraison.enCours &&
         (nouveauStatut == StatutLivraison.livree ||
             nouveauStatut == StatutLivraison.annulee ||
+            nouveauStatut == StatutLivraison.aReporter)) {
+      _retirerLivraisonEnCours(vehiculeId, id);
+    }
+  }
+
+  Future<void> changerStatutAvecNote(String id, StatutLivraison nouveauStatut, String note) async {
+    final livraison = state.livraisons.firstWhere((l) => l.id == id);
+    final ancienStatut = livraison.statut;
+    final vehiculeId = livraison.vehiculeId;
+    final updated = livraison.copyWith(statut: nouveauStatut, notes: note);
+
+    await _db.updateLivraison(updated);
+
+    _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
+    await chargerLivraisons();
+
+    if (vehiculeId == null) return;
+
+    if (ancienStatut == StatutLivraison.enCours &&
+        (nouveauStatut == StatutLivraison.annulee ||
             nouveauStatut == StatutLivraison.aReporter)) {
       _retirerLivraisonEnCours(vehiculeId, id);
     }
@@ -342,6 +418,7 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
     final livraison = state.livraisons.firstWhere((l) => l.id == livraisonId);
     final updated = livraison.copyWith(vehiculeId: vehiculeId);
     await _db.updateLivraison(updated);
+    _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
     await chargerLivraisons();
     if (updated.statut == StatutLivraison.enCours) {
       _demarrerMission(vehiculeId, livraisonId);
@@ -354,18 +431,22 @@ class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
       _retirerLivraisonEnCours(livraison.vehiculeId!, id);
     }
     await _db.deleteLivraison(id);
+    _lastLoadTime = DateTime.now().subtract(const Duration(seconds: 3));
     await chargerLivraisons();
   }
 
   void setFiltreStatut(StatutLivraison? statut) {
-    state = state.copyWith(filtreStatut: () => statut);
+    if (state.filtreStatut == statut) return;
+    state = state.copyWith(filtreStatut: statut);
   }
 
   void setRecherche(String query) {
+    if (state.recherche == query) return;
     state = state.copyWith(recherche: query);
   }
 
   void setTri(TriLivraisons tri) {
+    if (state.tri == tri) return;
     state = state.copyWith(tri: tri);
   }
 

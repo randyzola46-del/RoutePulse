@@ -6,12 +6,12 @@ import '../models/client.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/vehicules_viewmodel.dart';
 import '../viewmodels/clients_viewmodel.dart';
+import '../viewmodels/auth_viewmodel.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
 import '../widgets/client_form_sheet.dart';
 import '../widgets/livraison_form_sheet.dart';
 import '../widgets/vehicule_card.dart';
 import '../widgets/client_card.dart';
-import 'vehicule_detail_view.dart';
 import 'client_detail_view.dart';
 import 'vehicule_form_view.dart';
 
@@ -213,18 +213,12 @@ class _VehiculesTab extends ConsumerWidget {
               final v = state.vehiculesFiltres[i];
               return VehiculeCard(
                 vehicule: v,
-                onTap: () => Navigator.push(
-                  ctx,
-                  MaterialPageRoute(
-                    builder: (_) => VehiculeDetailView(vehicule: v),
-                  ),
-                ),
                 onToggleActif: (actif) => vm.changerDisponibilite(
                   v.id,
                   actif
                       ? DisponibiliteVehicule.disponible
                       : DisponibiliteVehicule.indisponible,
-                ),
+                ), onTap: () {  },
               );
             },
           ),
@@ -396,14 +390,39 @@ class _VehiculesFilterTabs extends StatelessWidget {
 
 // ========== ONGLET CLIENTS ==========
 
-class _ClientsTab extends ConsumerWidget {
+class _ClientsTab extends ConsumerStatefulWidget {
   const _ClientsTab();
+
+  @override
+  ConsumerState<_ClientsTab> createState() => _ClientsTabState();
+}
+
+class _ClientsTabState extends ConsumerState<_ClientsTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => false;
+
+  String? _lastUserId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final currentUserId = ref.read(authViewModelProvider).user?.id;
+    if (_lastUserId != currentUserId) {
+      _lastUserId = currentUserId;
+      if (currentUserId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(clientsViewModelProvider.notifier).loadClients();
+        });
+      }
+    }
+  }
 
   void _showNewDeliverySheet(BuildContext context, Client client) {
     final prefill = ClientPrefill(
       nom: client.nomComplet,
       adresse: client.adresse,
       creneauPrefere: client.creneauPrefere,
+      phone: client.phone,
     );
 
     showModalBottomSheet(
@@ -422,11 +441,12 @@ class _ClientsTab extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ClientFormSheet(
-        onSubmit: (prenom, nom, adresse, notes) async {
+        onSubmit: (prenom, nom, adresse, phone, notes) async {
           await vm.ajouterClient(
             prenom: prenom,
             nom: nom,
             adresse: adresse,
+            phone: phone,
             notes: notes,
           );
           if (context.mounted) {
@@ -451,11 +471,12 @@ class _ClientsTab extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => ClientFormSheet(
         client: client,
-        onSubmit: (prenom, nom, adresse, notes) async {
+        onSubmit: (prenom, nom, adresse, phone, notes) async {
           final updated = client.copyWith(
             prenom: prenom,
             nom: nom,
             adresse: adresse,
+            phone: phone,
             notes: notes,
           );
           await vm.modifierClient(updated);
@@ -518,7 +539,8 @@ class _ClientsTab extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    super.build(context);
     final state = ref.watch(clientsViewModelProvider);
     final vm = ref.read(clientsViewModelProvider.notifier);
 
@@ -723,10 +745,9 @@ class _ClientsFilterTabs extends StatelessWidget {
       FiltreClients.gold,
       FiltreClients.silver,
       FiltreClients.bronze,
-      FiltreClients.recurrents,
     ];
 
-    final labels = ['Tous', 'Gold', 'Silver', 'Bronze', 'Récurrents'];
+    final labels = ['Tous', 'Gold', 'Silver', 'Bronze',];
 
     return Container(
       color: AppColors.bgPrincipal,

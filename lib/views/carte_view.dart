@@ -9,6 +9,8 @@ import '../theme/app_theme.dart';
 import '../viewmodels/carte_viewmodel.dart';
 import '../services/tsptw_service.dart';
 import '../services/location_service.dart';
+import '../providers/carte_controller_provider.dart';
+import '../providers/navigation_provider.dart';
 import '../widgets/carte_stop_sheet.dart';
 
 class CarteView extends ConsumerStatefulWidget {
@@ -28,6 +30,10 @@ class _CarteViewState extends ConsumerState<CarteView>
   int? _selectedStopIndex;
   bool _mapReady = false;
 
+  // Pour le marqueur temporaire
+  ll.LatLng? _tempMarkerPosition;
+  Marker? _tempMarker;
+
   ll.LatLng _toLl(LatLng p) => ll.LatLng(p.lat, p.lng);
 
   Color _windowColor(WindowStatus s) {
@@ -42,6 +48,124 @@ class _CarteViewState extends ConsumerState<CarteView>
   }
 
   @override
+  void initState() {
+    super.initState();
+    _setupControllerListener();
+  }
+
+  void _setupControllerListener() {
+    final controller = ref.read(carteControllerProvider);
+    controller.addListener(_onExternalLocation);
+  }
+
+  void _onExternalLocation() {
+    final controller = ref.read(carteControllerProvider);
+    final location = controller.selectedLocation;
+
+    if (location != null && _mapReady) {
+      _applyLocation(location);
+    } else if (location != null && !_mapReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_mapReady && mounted) {
+          _applyLocation(location);
+        }
+      });
+    }
+  }
+
+  void _applyLocation(LatLngForMap location) {
+    final target = ll.LatLng(location.lat, location.lng);
+    _mapController.move(target, 15);
+    _showTemporaryMarker(target, location.address);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.location_on, color: AppColors.statusLivree, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '📍 ${location.address}',
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.surface,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: AppColors.statusLivree.withOpacity(0.3)),
+            ),
+          ),
+        );
+      }
+    });
+
+    Future.delayed(const Duration(seconds: 3), () {
+      _hideTemporaryMarker();
+      ref.read(carteControllerProvider).clearSelected();
+    });
+  }
+
+  void _showTemporaryMarker(ll.LatLng position, String address) {
+    _hideTemporaryMarker();
+    _tempMarkerPosition = position;
+
+    _tempMarker = Marker(
+      point: position,
+      width: 60,
+      height: 70,
+      alignment: Alignment.topCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.statusLivree,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.statusLivree.withOpacity(0.6),
+                  blurRadius: 16,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.location_on,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+    setState(() {});
+  }
+
+  void _hideTemporaryMarker() {
+    _tempMarker = null;
+    _tempMarkerPosition = null;
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    final controller = ref.read(carteControllerProvider);
+    controller.removeListener(_onExternalLocation);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     super.build(context);
     final state = ref.watch(carteViewModelProvider);
@@ -50,15 +174,12 @@ class _CarteViewState extends ConsumerState<CarteView>
     final route = state.routeResult;
     final geometry = state.osrmGeometry;
     final origin = state.userLocation;
-
-    // Centre par défaut : Antananarivo si pas encore localisé
     final center = origin ?? const LatLng(-18.9126, 47.5079);
 
     return Scaffold(
       backgroundColor: AppColors.bgPrincipal,
       body: Stack(
         children: [
-          // ── Carte OpenStreetMap ─────────────────────────────────────────
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -66,22 +187,24 @@ class _CarteViewState extends ConsumerState<CarteView>
               initialZoom: 13,
               backgroundColor: AppColors.bgPrincipal,
               onMapReady: () {
-                setState(() => _mapReady = true);
-                // Dès que la carte est prête et qu'on a la position → centrer
+                setState(() {
+                  _mapReady = true;
+                });
+                final controller = ref.read(carteControllerProvider);
+                if (controller.selectedLocation != null) {
+                  _applyLocation(controller.selectedLocation!);
+                }
                 if (origin != null) {
                   _fitBounds(origin, route);
                 }
               },
             ),
             children: [
-              // Tuiles OSM avec filtre sombre
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.routepulse.app',
                 tileBuilder: _darkTile,
               ),
-
-              // Cercle de précision GPS
               if (origin != null &&
                   state.locationAccuracyM != null &&
                   state.locationAccuracyM! < 500)
@@ -97,8 +220,6 @@ class _CarteViewState extends ConsumerState<CarteView>
                     ),
                   ],
                 ),
-
-              // Polyligne de l'itinéraire OSRM
               if (geometry != null && geometry.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -110,11 +231,8 @@ class _CarteViewState extends ConsumerState<CarteView>
                     ),
                   ],
                 ),
-
-              // Marqueurs
               MarkerLayer(
                 markers: [
-                  // Position utilisateur réelle
                   if (origin != null)
                     Marker(
                       point: _toLl(origin),
@@ -125,8 +243,6 @@ class _CarteViewState extends ConsumerState<CarteView>
                         source: state.locationSource,
                       ),
                     ),
-
-                  // Stops optimisés
                   if (route != null)
                     ...List.generate(route.orderedStops.length, (i) {
                       final stop = route.orderedStops[i];
@@ -152,12 +268,11 @@ class _CarteViewState extends ConsumerState<CarteView>
                         ),
                       );
                     }),
-                ],
+                  if (_tempMarker != null) _tempMarker!,
+                ].where((m) => m != null).toList(),
               ),
             ],
           ),
-
-          // ── Header KPI flottant ──────────────────────────────────────────
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
@@ -174,8 +289,6 @@ class _CarteViewState extends ConsumerState<CarteView>
               onRelocate: () => vm.relocateAndRefresh(),
             ),
           ),
-
-          // ── Alerte GPS refusé ────────────────────────────────────────────
           if (state.locationSource == LocationSource.denied ||
               state.locationSource == LocationSource.unavailable)
             Positioned(
@@ -184,8 +297,6 @@ class _CarteViewState extends ConsumerState<CarteView>
               right: 16,
               child: const _GpsAlert(),
             ),
-
-          // ── Alerte Fallback (mode démo) ───────────────────────────────────
           if (state.locationSource == LocationSource.fallback)
             Positioned(
               top: MediaQuery.of(context).padding.top + 110,
@@ -193,15 +304,12 @@ class _CarteViewState extends ConsumerState<CarteView>
               right: 16,
               child: const _FallbackAlert(),
             ),
-
-          // ── NOUVEAU : Menu flottant avec boutons optimisés ────────────────
           Positioned(
             right: 16,
             bottom: _sheetExpanded ? 340 : 130,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Bouton Optimisation (principal)
                 _FloatingActionButton(
                   icon: Icons.route,
                   label: 'Optimiser',
@@ -216,7 +324,6 @@ class _CarteViewState extends ConsumerState<CarteView>
                   isLoading: state.isLoading,
                 ),
                 const SizedBox(height: 12),
-                // Bouton Localisation
                 _FloatingActionButton(
                   icon: Icons.emoji_people,
                   label: 'Me localiser',
@@ -233,8 +340,6 @@ class _CarteViewState extends ConsumerState<CarteView>
               ],
             ),
           ),
-
-          // ── Bottom sheet ─────────────────────────────────────────────────
           if (route != null)
             Positioned(
               left: 0,
@@ -254,8 +359,6 @@ class _CarteViewState extends ConsumerState<CarteView>
                 },
               ),
             ),
-
-          // ── Overlay de chargement avec étapes ───────────────────────────
           if (state.isLoading)
             Positioned(
               top: MediaQuery.of(context).padding.top + 110,
@@ -265,16 +368,12 @@ class _CarteViewState extends ConsumerState<CarteView>
                 child: _LoadingOverlay(state: state),
               ),
             ),
-
-          // ── Message vide (NOUVEAU : avec carte de fond améliorée) ────────
           if (state.status == MapStatus.idle && route == null)
             const Positioned.fill(
               child: Center(
                 child: _EmptyState(),
               ),
             ),
-
-          // ── Erreur ───────────────────────────────────────────────────────
           if (state.status == MapStatus.error)
             Positioned(
               top: MediaQuery.of(context).padding.top + 110,
@@ -288,28 +387,19 @@ class _CarteViewState extends ConsumerState<CarteView>
     );
   }
 
-  // ✅ FONCTION CORRIGÉE - Utilise CameraFit.coordinates au lieu de LatLngBounds
   void _fitBounds(LatLng origin, RouteResult? route) {
     if (!_mapReady) return;
-
     final List<ll.LatLng> points = [];
-
-    // Ajouter l'origine
     points.add(_toLl(origin));
-
-    // Ajouter tous les stops
     if (route != null) {
       for (final stop in route.orderedStops) {
         points.add(_toLl(stop.position));
       }
     }
-
     if (points.isEmpty) {
       _mapController.move(_toLl(origin), 14);
       return;
     }
-
-    // Ajuster la caméra pour voir tous les points
     _mapController.fitCamera(
       CameraFit.coordinates(
         coordinates: points,
@@ -330,8 +420,6 @@ class _CarteViewState extends ConsumerState<CarteView>
     );
   }
 }
-
-// ─── NOUVEAU : Bouton flottant amélioré avec label ───────────────────────────
 
 class _FloatingActionButton extends StatelessWidget {
   final IconData icon;
@@ -359,10 +447,7 @@ class _FloatingActionButton extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              color.withOpacity(0.95),
-              color,
-            ],
+            colors: [color.withOpacity(0.95), color],
           ),
           shape: BoxShape.circle,
           boxShadow: [
@@ -380,11 +465,7 @@ class _FloatingActionButton extends StatelessWidget {
             AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
               opacity: isLoading ? 0 : 1,
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 28,
-              ),
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
             if (isLoading)
               const SizedBox(
@@ -401,8 +482,6 @@ class _FloatingActionButton extends StatelessWidget {
     );
   }
 }
-
-// ─── Widgets existants (gardés tels quels) ───────────────────────────────────
 
 class _UserMarker extends StatelessWidget {
   final bool isReal;
@@ -441,11 +520,7 @@ class _UserMarker extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        icon,
-        color: Colors.white,
-        size: 20,
-      ),
+      child: Icon(icon, color: Colors.white, size: 20),
     );
   }
 }
@@ -503,51 +578,6 @@ class _StopMarker extends StatelessWidget {
           painter: _PinTail(color: statusColor),
         ),
       ],
-    );
-  }
-}
-
-class _InactiveStopMarker extends StatelessWidget {
-  final String clientName;
-  final StatutLivraison statut;
-
-  const _InactiveStopMarker({
-    required this.clientName,
-    required this.statut,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    switch (statut) {
-      case StatutLivraison.livree:
-        color = AppColors.statusLivree;
-        break;
-      case StatutLivraison.annulee:
-        color = AppColors.statusAnnulee;
-        break;
-      case StatutLivraison.aReporter:
-        color = AppColors.statusReporter;
-        break;
-      default:
-        color = AppColors.textMuted;
-    }
-
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withOpacity(0.3),
-        border: Border.all(color: color.withOpacity(0.5), width: 1.5),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.circle,
-          color: color,
-          size: 8,
-        ),
-      ),
     );
   }
 }
@@ -618,8 +648,6 @@ class _MapHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // Les boutons ont été déplacés vers le FAB, on garde juste le badge
-              const SizedBox(width: 6),
             ],
           ),
           if (route != null) ...[
@@ -674,9 +702,7 @@ class _GpsIndicator extends StatelessWidget {
       case LocationSource.gps:
         color = AppColors.statusLivree;
         icon = Icons.gps_fixed;
-        tooltip = accuracyM != null
-            ? 'GPS · ±${accuracyM!.round()}m'
-            : 'GPS actif';
+        tooltip = accuracyM != null ? 'GPS · ±${accuracyM!.round()}m' : 'GPS actif';
         break;
       case LocationSource.network:
         color = AppColors.statusCours;
@@ -778,7 +804,6 @@ class _LoadingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = state.geocodingProgress;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -804,13 +829,7 @@ class _LoadingOverlay extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Flexible(
-                child: Text(
-                  _label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                ),
+                child: Text(_label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
               ),
             ],
           ),
@@ -825,10 +844,7 @@ class _LoadingOverlay extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '${progress.done}/${progress.total} adresses',
-              style: const TextStyle(
-                fontSize: 10,
-                color: AppColors.textMuted,
-              ),
+              style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
             ),
           ],
         ],
@@ -851,16 +867,12 @@ class _GpsAlert extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.location_off,
-              color: AppColors.statusReporter, size: 18),
+          const Icon(Icons.location_off, color: AppColors.statusReporter, size: 18),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
               'Localisation GPS indisponible. Activez-la dans les paramètres pour une optimisation précise.',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.statusReporter,
-              ),
+              style: TextStyle(fontSize: 12, color: AppColors.statusReporter),
             ),
           ),
         ],
@@ -883,16 +895,12 @@ class _FallbackAlert extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline,
-              color: AppColors.statusAttente, size: 18),
+          const Icon(Icons.info_outline, color: AppColors.statusAttente, size: 18),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
               'Mode démo : Position par défaut (Antananarivo). Activez le GPS pour une vraie optimisation.',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.statusAttente,
-              ),
+              style: TextStyle(fontSize: 12, color: AppColors.statusAttente),
             ),
           ),
         ],
@@ -916,16 +924,12 @@ class _ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline,
-              color: AppColors.statusAnnulee, size: 18),
+          const Icon(Icons.error_outline, color: AppColors.statusAnnulee, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.statusAnnulee,
-              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.statusAnnulee),
             ),
           ),
         ],
@@ -933,8 +937,6 @@ class _ErrorBanner extends StatelessWidget {
     );
   }
 }
-
-// ─── NOUVEAU : EmptyState amélioré avec carte de fond ────────────────────────
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
@@ -949,16 +951,10 @@ class _EmptyState extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              AppColors.surface,
-              AppColors.surface.withOpacity(0.95),
-            ],
+            colors: [AppColors.surface, AppColors.surface.withOpacity(0.95)],
           ),
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: AppColors.coral.withOpacity(0.25),
-            width: 1.5,
-          ),
+          border: Border.all(color: AppColors.coral.withOpacity(0.25), width: 1.5),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.15),
@@ -971,17 +967,13 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icône principale avec fond
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.coral,
-                    AppColors.coral.withOpacity(0.7),
-                  ],
+                  colors: [AppColors.coral, AppColors.coral.withOpacity(0.7)],
                 ),
                 shape: BoxShape.circle,
                 boxShadow: [
@@ -992,15 +984,9 @@ class _EmptyState extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.local_shipping_outlined,
-                size: 48,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.local_shipping_outlined, size: 48, color: Colors.white),
             ),
             const SizedBox(height: 24),
-
-            // Titre
             const Text(
               'Vous n\'avez pas encore de livraison en cours',
               style: TextStyle(
@@ -1012,66 +998,17 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-
-            // Description détaillée
             Container(
               constraints: const BoxConstraints(maxWidth: 260),
               child: const Text(
                 'Ajoutez des points de livraison pour générer un parcours optimisé avec calcul des fenêtres horaires.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textMuted,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.textMuted, height: 1.4),
                 textAlign: TextAlign.center,
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-// Widget pour les étapes
-class _StepItem extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final Color color;
-
-  const _StepItem({
-    required this.icon,
-    required this.text,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: color,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppColors.textSub,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }

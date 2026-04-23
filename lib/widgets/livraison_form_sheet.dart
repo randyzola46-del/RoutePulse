@@ -1,22 +1,26 @@
-// lib/views/livraison_form_sheet.dart
+// lib/widgets/livraison_form_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../models/livraison.dart';
 import '../models/client.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
+import '../viewmodels/clients_viewmodel.dart';
+import '../services/database_service.dart';
 import '../theme/app_theme.dart';
 import 'time_range_picker.dart';
 
-// ✅ Classe pour le pré-remplissage depuis un client
 class ClientPrefill {
   final String nom;
   final String adresse;
   final String creneauPrefere;
+  final String? phone;
 
   const ClientPrefill({
     required this.nom,
     required this.adresse,
     required this.creneauPrefere,
+    this.phone,
   });
 }
 
@@ -39,6 +43,7 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
 
   late final TextEditingController _nomCtrl;
   late final TextEditingController _adresseCtrl;
+  late final TextEditingController _phoneCtrl;
   late String _creneauValue;
   late final TextEditingController _colisCtrl;
   late final TextEditingController _poidsCtrl;
@@ -47,6 +52,8 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
 
   bool get _isEdit => widget.livraison != null;
   bool _isSubmitting = false;
+  String? _originalClientId;
+  String? _originalPhone;
 
   @override
   void initState() {
@@ -55,23 +62,88 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
     final prefill = widget.prefillClient;
 
     _nomCtrl = TextEditingController(text: l?.nomClient ?? prefill?.nom ?? '');
-    _adresseCtrl = TextEditingController(
-        text: l?.adresse ?? prefill?.adresse ?? '');
+    _adresseCtrl = TextEditingController(text: l?.adresse ?? prefill?.adresse ?? '');
+    _phoneCtrl = TextEditingController(text: prefill?.phone ?? '');
     _creneauValue = l?.creneau ?? prefill?.creneauPrefere ?? '09:00 - 12:00';
     _colisCtrl = TextEditingController(text: l?.nbColis.toString() ?? '1');
     _poidsCtrl = TextEditingController(text: l?.poids.toString() ?? '');
     _notesCtrl = TextEditingController(text: l?.notes ?? '');
     _statut = l?.statut ?? StatutLivraison.enAttente;
+
+    // Si c'est une modification, récupérer le téléphone du client existant
+    if (_isEdit && l != null) {
+      _loadClientPhone(l.clientId);
+    }
+  }
+
+  Future<void> _loadClientPhone(String clientId) async {
+    final db = DatabaseService();
+    final client = await db.getClient(clientId);
+    if (client != null && client.phone != null && mounted) {
+      setState(() {
+        _originalClientId = clientId;
+        _originalPhone = client.phone;
+        _phoneCtrl.text = client.phone!;
+      });
+    }
   }
 
   @override
   void dispose() {
     _nomCtrl.dispose();
     _adresseCtrl.dispose();
+    _phoneCtrl.dispose();
     _colisCtrl.dispose();
     _poidsCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _updateClientWithPhone(String nomClient, String adresse, String phone) async {
+    final db = DatabaseService();
+    final clients = await db.getAllClients();
+
+    Client? existingClient;
+    for (final c in clients) {
+      if (c.nomComplet.toLowerCase() == nomClient.toLowerCase()) {
+        existingClient = c;
+        break;
+      }
+    }
+
+    if (existingClient != null) {
+      // Mettre à jour le téléphone si nécessaire
+      if (existingClient.phone != phone && phone.isNotEmpty) {
+        final updatedClient = existingClient.copyWith(phone: phone);
+        await db.updateClient(updatedClient);
+
+        final clientsVM = ref.read(clientsViewModelProvider.notifier);
+        await clientsVM.loadClients();
+      }
+    } else if (phone.isNotEmpty) {
+      // Créer un nouveau client avec téléphone
+      final parts = nomClient.trim().split(' ');
+      String prenom = parts.first;
+      String nom = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      final nouveauClient = Client(
+        id: const Uuid().v4(),
+        prenom: prenom,
+        nom: nom,
+        adresse: adresse,
+        phone: phone,
+        rang: RangClient.standard,
+        estRecurrent: false,
+        livraisonsTotal: 0,
+        tauxSucces: 0.0,
+        creneauPrefere: '09:00 - 12:00',
+        dateCreation: DateTime.now(),
+      );
+      await db.insertClient(nouveauClient);
+
+      final clientsVM = ref.read(clientsViewModelProvider.notifier);
+      await clientsVM.loadClients();
+    }
   }
 
   Future<void> _submit() async {
@@ -83,6 +155,15 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
     final vm = ref.read(livraisonsViewModelProvider.notifier);
 
     try {
+      // Mettre à jour le client avec le téléphone (pour création ou modification)
+      if (_phoneCtrl.text.trim().isNotEmpty) {
+        await _updateClientWithPhone(
+          _nomCtrl.text.trim(),
+          _adresseCtrl.text.trim(),
+          _phoneCtrl.text.trim(),
+        );
+      }
+
       if (_isEdit) {
         await vm.modifierLivraison(
           widget.livraison!.copyWith(
@@ -189,6 +270,14 @@ class _LivraisonFormSheetState extends ConsumerState<LivraisonFormSheet> {
                 label: 'Adresse de livraison',
                 icon: Icons.location_on_outlined,
                 validator: (v) => v!.trim().isEmpty ? 'Champ obligatoire' : null,
+              ),
+              const SizedBox(height: 12),
+
+              _buildField(
+                controller: _phoneCtrl,
+                label: 'Téléphone du client',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 12),
 

@@ -56,7 +56,7 @@ extension StatutLivraisonX on StatutLivraison {
   }
 }
 
-// ✅ Fonction statique pour convertir du JSON
+//Fonction statique pour convertir du JSON
 StatutLivraison statutLivraisonFromJson(String value) {
   switch (value) {
     case 'en_cours':
@@ -127,7 +127,7 @@ class Livraison {
       creneau: map['creneau'],
       nbColis: map['nb_colis'],
       poids: map['poids'],
-      statut: statutLivraisonFromJson(map['statut']), // ✅ Utiliser la fonction statique
+      statut: statutLivraisonFromJson(map['statut']),
       notes: map['notes'],
       dateCreation: DateTime.parse(map['date_creation']),
       vehiculeId: map['vehicule_id'],

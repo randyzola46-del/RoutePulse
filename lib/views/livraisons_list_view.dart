@@ -57,6 +57,17 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
     });
   }
 
+  void _handleStatutChangeWithNote(Livraison livraison, StatutLivraison nouveauStatut, String note, LivraisonsViewModel vm) {
+    vm.changerStatutAvecNote(livraison.id, nouveauStatut, note);
+    String message = _getStatutChangeMessage(livraison.nomClient, nouveauStatut);
+    SnackBarUtils.showStatutChange(context, nouveauStatut, message);
+
+    Future.microtask(() {
+      final etatActuel = ref.read(livraisonsViewModelProvider);
+      _mettreAJourPoidsVehicule(etatActuel.livraisons);
+    });
+  }
+
   String _getStatutChangeMessage(String nomClient, StatutLivraison nouveauStatut) {
     switch (nouveauStatut) {
       case StatutLivraison.enCours:
@@ -295,6 +306,7 @@ class _LivraisonsListViewState extends ConsumerState<LivraisonsListView> {
             });
           },
           onStatutChange: (nouveauStatut) => _handleStatutChange(livraison, nouveauStatut, vm),
+          onStatutChangeWithNote: (nouveauStatut, note) => _handleStatutChangeWithNote(livraison, nouveauStatut, note, vm),
         );
       },
     );
