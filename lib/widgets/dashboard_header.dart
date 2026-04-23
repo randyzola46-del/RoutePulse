@@ -1,3 +1,4 @@
+// lib/widgets/dashboard_header.dart
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -6,12 +7,14 @@ class DashboardHeader extends StatelessWidget {
   final double progress;
   final int total;
   final int livrees;
+  final String userName;
 
   const DashboardHeader({
     super.key,
     required this.progress,
     required this.total,
     required this.livrees,
+    required this.userName,
   });
 
   @override
@@ -34,16 +37,16 @@ class DashboardHeader extends StatelessWidget {
         children: [
           // Greeting
           Text(
-            'Bonjour,',
+            'Bonjour${userName.isNotEmpty ? ',' : ''}',
             style: tt.bodyMedium?.copyWith(
-                color: AppColors.textPrimary,
+              color: AppColors.textPrimary,
               fontSize: 13,
             ),
           ),
           Text(
-            'Jean-Michel',
+            userName.isNotEmpty ? userName : 'Invité',
             style: tt.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w800,
               fontSize: 25,
             ),
           ),
@@ -121,10 +124,10 @@ class _CompletionBadge extends StatelessWidget {
       child: Text(
         '$pct% complété',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.coral,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
+          color: AppColors.coral,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
       ),
     );
   }

@@ -1,16 +1,17 @@
+// lib/views/dashboard_view.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/livraison.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
+import '../viewmodels/auth_viewmodel.dart';
 import '../widgets/dashboard_header.dart';
-import '../widgets/dashboard_kpi_grid.dart';
+import '../widgets/dashboard_carousel.dart';
 import '../widgets/dashboard_delivery_tile.dart';
 import '../widgets/dashboard_empty_state.dart';
 import '../widgets/livraison_form_sheet.dart' hide statutColor;
 
-//Vue principale du tableau de bord.
 class DashboardView extends ConsumerWidget {
   final VoidCallback? onVoirTout;
 
@@ -19,48 +20,46 @@ class DashboardView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(livraisonsViewModelProvider);
+    final authState = ref.watch(authViewModelProvider);
+    final userName = authState.user?.prenom ?? 'Utilisateur';
 
-    final total    = state.totalLivraisons;
-    final livrees  = state.countParStatut(StatutLivraison.livree);
-    final enCours  = state.countParStatut(StatutLivraison.enCours);
-    final retard   = state.countParStatut(StatutLivraison.aReporter);
+    final total = state.totalLivraisons;
+    final livrees = state.countParStatut(StatutLivraison.livree);
+    final enCours = state.countParStatut(StatutLivraison.enCours);
+    final retard = state.countParStatut(StatutLivraison.aReporter);
     final progress = total > 0 ? livrees / total : 0.0;
-    final apercu   = state.livraisons.take(5).toList();
+    final apercu = state.livraisons.take(5).toList();
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        //Header (greeting + barre de progression)
+        // Header (greeting + barre de progression)
         SliverToBoxAdapter(
           child: DashboardHeader(
             progress: progress,
             total: total,
             livrees: livrees,
+            userName: userName,
           ),
         ),
 
-        //Grille KPI 2×2
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+        //Carrousel de cartes
+        const SliverPadding(
+          padding: EdgeInsets.symmetric(vertical: 16),
           sliver: SliverToBoxAdapter(
-            child: DashboardKpiGrid(
-              total: total,
-              livrees: livrees,
-              enCours: enCours,
-              retard: retard,
-            ),
+            child: DashboardCarousel(),
           ),
         ),
 
-        //Titre section + lien « Voir tout »
+        // Titre section + lien « Voir tout »
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
           sliver: SliverToBoxAdapter(
             child: _SectionHeader(onVoirTout: onVoirTout),
           ),
         ),
 
-        //Liste aperçu ou état vide
+        // Liste aperçu ou état vide
         if (apercu.isEmpty)
           SliverToBoxAdapter(
             child: DashboardEmptyState(
@@ -72,13 +71,13 @@ class DashboardView extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (_, i) => DashboardDeliveryTile(livraison: apercu[i]),
+                    (_, i) => DashboardDeliveryTile(livraison: apercu[i]),
                 childCount: apercu.length,
               ),
             ),
           ),
 
-        //Bouton nouvelle livraison
+        // Bouton nouvelle livraison
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
           sliver: SliverToBoxAdapter(
@@ -103,9 +102,6 @@ class DashboardView extends ConsumerWidget {
   }
 }
 
-//Widgets privés locaux
-
-//En-tête de section « Livraisons du jour » + lien « Voir tout ».
 class _SectionHeader extends StatelessWidget {
   final VoidCallback? onVoirTout;
   const _SectionHeader({this.onVoirTout});
@@ -119,7 +115,7 @@ class _SectionHeader extends StatelessWidget {
         Text(
           'Livraisons du jour',
           style: tt.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w800,
             fontSize: 20,
           ),
         ),
@@ -139,7 +135,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Bouton pleine largeur pour créer une nouvelle livraison.
 class _NewDeliveryButton extends StatelessWidget {
   final VoidCallback onPressed;
   const _NewDeliveryButton({required this.onPressed});
