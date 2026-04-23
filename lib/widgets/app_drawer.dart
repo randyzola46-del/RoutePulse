@@ -90,7 +90,7 @@ class AppDrawer extends ConsumerWidget {
 
             const SizedBox(height: 20),
 
-            // ✅ OPTION BIOMÉTRIQUE (si utilisateur connecté)
+            //OPTION BIOMÉTRIQUE (si utilisateur connecté)
             if (user != null)
               FutureBuilder<bool>(
                 future: BiometricService().isBiometricAvailable(),

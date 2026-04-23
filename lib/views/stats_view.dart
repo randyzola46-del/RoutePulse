@@ -50,14 +50,6 @@ class _DS {
   static const r12 = BorderRadius.all(Radius.circular(12));
   static const r16 = BorderRadius.all(Radius.circular(16));
   static const r20 = BorderRadius.all(Radius.circular(20));
-  static const r24 = BorderRadius.all(Radius.circular(24));
-
-  // Espacement
-  static const p16 = EdgeInsets.all(16);
-  static const p20 = EdgeInsets.all(20);
-  static const p24 = EdgeInsets.all(24);
-  static const ph16 = EdgeInsets.symmetric(horizontal: 16);
-  static const pv8  = EdgeInsets.symmetric(vertical: 8);
 
   // Typographie
   static const _base = TextStyle(fontFamily: 'Nunito');

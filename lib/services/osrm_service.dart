@@ -70,8 +70,8 @@ class OsrmService {
 
   // ── Routing OSRM ────────────────────────────────────────────────────────
 
-  /// Calcule l'itinéraire routier réel entre waypoints.
-  /// Retourne null si OSRM est injoignable (fallback haversine dans le VM).
+  // Calcule l'itinéraire routier réel entre waypoints.
+  // Retourne null si OSRM est injoignable (fallback haversine dans le VM).
   static Future<OsrmRoute?> getRoute(List<LatLng> waypoints) async {
     if (waypoints.length < 2) return null;
     try {

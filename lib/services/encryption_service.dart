@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 
-/// Service de chiffrement pour les données sensibles
-/// Utilise AES-256-GCM pour le chiffrement des données SQLite
-/// et flutter_secure_storage pour la clé maître
+//Service de chiffrement pour les données sensibles
+// Utilise AES-256-GCM pour le chiffrement des données SQLite
+// et flutter_secure_storage pour la clé maître
 class EncryptionService {
   static final EncryptionService _instance = EncryptionService._internal();
   factory EncryptionService() => _instance;
@@ -20,7 +20,7 @@ class EncryptionService {
 
   bool get isInitialized => _masterKey != null && _iv != null;
 
-  /// Initialise ou récupère la clé de chiffrement maître
+  // Initialise ou récupère la clé de chiffrement maître
   Future<void> init() async {
     // Récupérer la clé existante ou en créer une nouvelle
     final storedKey = await _secureStorage.read(key: _masterKeyId);
@@ -41,7 +41,7 @@ class EncryptionService {
     }
   }
 
-  /// Chiffre une chaîne de caractères
+  // Chiffre une chaîne de caractères
   String encryptString(String plainText) {
     if (!isInitialized) {
       throw StateError('EncryptionService non initialisé. Appelez init() d\'abord.');
@@ -60,7 +60,7 @@ class EncryptionService {
     }
   }
 
-  /// Déchiffre une chaîne de caractères
+  // Déchiffre une chaîne de caractères
   String decryptString(String encryptedBase64) {
     if (!isInitialized) {
       throw StateError('EncryptionService non initialisé. Appelez init() d\'abord.');
@@ -96,7 +96,7 @@ class EncryptionService {
     return encrypted;
   }
 
-  /// Déchiffre un Map provenant de SQLite
+  //Déchiffre un Map provenant de SQLite
   Map<String, dynamic> decryptMap(Map<String, dynamic> data, List<String> sensitiveFields) {
     final decrypted = Map<String, dynamic>.from(data);
 
@@ -116,7 +116,7 @@ class EncryptionService {
     return decrypted;
   }
 
-  /// Efface la clé maître (déconnexion)
+  // Efface la clé maître (déconnexion)
   Future<void> clearMasterKey() async {
     await _secureStorage.delete(key: _masterKeyId);
     await _secureStorage.delete(key: _ivKeyId);

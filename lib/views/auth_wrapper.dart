@@ -15,11 +15,11 @@ class AuthWrapper extends ConsumerStatefulWidget {
 }
 
 class _AuthWrapperState extends ConsumerState<AuthWrapper> {
-  bool _showOnboarding = true; // Toujours true au départ
+  bool _showOnboarding = true;
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Toujours afficher l'onboarding d'abord
+    //Toujours afficher l'onboarding d'abord
     if (_showOnboarding) {
       return OnboardingView(
         onDone: () => setState(() => _showOnboarding = false),

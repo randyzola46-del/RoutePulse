@@ -7,14 +7,14 @@ class DashboardHeader extends StatelessWidget {
   final double progress;
   final int total;
   final int livrees;
-  final String userName;  // ✅ NOUVEAU : nom de l'utilisateur
+  final String userName;
 
   const DashboardHeader({
     super.key,
     required this.progress,
     required this.total,
     required this.livrees,
-    required this.userName,  // ✅ NOUVEAU
+    required this.userName,
   });
 
   @override

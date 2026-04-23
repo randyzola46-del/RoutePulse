@@ -2,7 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/vehicule.dart';
-import '../services/app_database_service.dart';  // ✅ CHANGÉ
+import '../services/app_database_service.dart';
 import 'livraisons_viewmodel.dart';
 
 class VehiculesState {
@@ -58,7 +58,7 @@ const _sentinel = Object();
 
 class VehiculesViewModel extends StateNotifier<VehiculesState> {
   final Ref _ref;
-  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
+  final AppDatabaseService _db = AppDatabaseService();
   final Uuid _uuid = const Uuid();
 
   VehiculesViewModel(this._ref) : super(const VehiculesState()) {
@@ -89,9 +89,7 @@ class VehiculesViewModel extends StateNotifier<VehiculesState> {
     if (autoAssignLivraisons) {
       final livraisonsVM = _ref.read(livraisonsViewModelProvider.notifier);
       if (dispo == DisponibiliteVehicule.disponible && ancienneDispo == DisponibiliteVehicule.indisponible) {
-        // Logique si nécessaire
       } else if (dispo == DisponibiliteVehicule.indisponible && ancienneDispo == DisponibiliteVehicule.disponible) {
-        // Logique si nécessaire
       }
     }
   }

@@ -2,7 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../models/client.dart';
-import '../services/app_database_service.dart';  // ✅ CHANGÉ
+import '../services/app_database_service.dart';
 import 'auth_viewmodel.dart';
 
 enum FiltreClients { tous, gold, silver, bronze, recurrents, nouveaux }
@@ -117,7 +117,7 @@ class ClientsState {
 
 class ClientsViewModel extends StateNotifier<ClientsState> {
   final Ref _ref;
-  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
+  final AppDatabaseService _db = AppDatabaseService();
   final Uuid _uuid = const Uuid();
 
   ClientsViewModel(this._ref) : super(const ClientsState()) {

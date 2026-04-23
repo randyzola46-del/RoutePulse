@@ -161,11 +161,6 @@ class _LivraisonCardState extends ConsumerState<LivraisonCard> {
 
   void _callClient() {
     if (_clientPhone != null && _clientPhone!.isNotEmpty) {
-      // Pour lancer un appel téléphonique
-      // Uri telUri = Uri(scheme: 'tel', path: _clientPhone);
-      // await launchUrl(telUri);
-
-      // Pour l'instant, afficher une boîte de dialogue avec le numéro
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -197,7 +192,6 @@ class _LivraisonCardState extends ConsumerState<LivraisonCard> {
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.pop(ctx);
-                // Ici vous pouvez ajouter l'action d'appel réel
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Fonction d\'appel à implémenter'),
@@ -624,7 +618,7 @@ class _ExpandedContent extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          // NOUVEAU: Ligne de contact téléphone
+          //Ligne de contact téléphone
           if (clientPhone != null && clientPhone!.isNotEmpty)
             _InfoRow(
               icon: Icons.phone_outlined,
@@ -853,7 +847,7 @@ class _LocaliserButton extends StatelessWidget {
   }
 }
 
-// NOUVEAU: Bouton d'appel
+//Bouton d'appel
 class _CallButton extends StatelessWidget {
   final VoidCallback onPressed;
 

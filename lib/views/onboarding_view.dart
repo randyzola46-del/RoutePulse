@@ -160,7 +160,6 @@ class _OnboardingViewState extends State<OnboardingView>
                   ),
                 ),
 
-                // Espace vide beaucoup plus grand pour descendre les textes
                 const Spacer(flex: 5),
 
                 // Slides
@@ -260,8 +259,6 @@ class _SlideContent extends StatelessWidget {
               fontWeight: FontWeight.w400,
             ),
           ),
-
-          // Ajout d'un espace en bas pour ne pas coller au bottom bar
           const SizedBox(height: 40),
         ],
       ),

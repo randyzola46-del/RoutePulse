@@ -84,7 +84,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
     setState(() => _isLoading = false);
 
     if (success && mounted) {
-      // ✅ Attendre que l'utilisateur soit bien dans le state
+      //Attendre que l'utilisateur soit bien dans le state
       await Future.delayed(const Duration(milliseconds: 200));
 
       final user = ref.read(authViewModelProvider).user;
@@ -92,7 +92,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
       print('🔐 [Register] Biométrie activée: $_biometricEnabled');
       print('📱 [Register] Biométrie disponible: $_isBiometricAvailable');
 
-      // ✅ Sauvegarde des identifiants biométriques si activée
+      //Sauvegarde des identifiants biométriques si activée
       if (_biometricEnabled && _isBiometricAvailable && user != null) {
         print('💾 [Register] Sauvegarde des credentials biométriques...');
         await _biometricService.saveBiometricPreference(user.id, true);
@@ -102,13 +102,13 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
           _passwordCtrl.text,
         );
 
-        // ✅ Sauvegarde aussi l'email pour la connexion rapide
+        //Sauvegarde aussi l'email pour la connexion rapide
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('last_biometric_email', _emailCtrl.text.trim());
 
         print('✅ [Register] Credentials biométriques sauvegardés avec succès');
 
-        // Vérification immédiate
+        //Vérification immédiate
         final checkPref = await _biometricService.getBiometricPreference(user.id);
         final checkCreds = await _biometricService.getBiometricCredentials(user.id);
         print('🔍 [Register] Vérification - Préférence: $checkPref, Credentials: ${checkCreds != null}');

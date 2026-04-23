@@ -54,13 +54,12 @@ class _BiometricAuthDialogState extends ConsumerState<BiometricAuthDialog> {
       if (result == BiometricResult.success) {
         _isSuccess = true;
 
-        // ✅ 1. Fermer d'abord le dialogue
+        //1. Fermer d'abord le dialogue
         if (mounted) {
           Navigator.of(context).pop();
         }
 
-        // ✅ 2. Puis appeler le callback de succès
-        // Petit délai pour que le dialogue soit bien fermé
+        //2. Puis appeler le callback de succès
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) {
             widget.onSuccess();

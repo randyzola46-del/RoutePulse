@@ -76,8 +76,6 @@ class BiometricService {
     }
   }
 
-  /// ✅ NOUVEAU : Réinitialise l'authentification biométrique
-  /// Permet de contourner le verrouillage temporaire (30s) pour les tests
   Future<void> resetAuthentication() async {
     try {
       await _localAuth.stopAuthentication();
@@ -87,12 +85,10 @@ class BiometricService {
     }
   }
 
-  /// Version SIMPLIFIÉE pour les tests avec reset automatique
   Future<BiometricResult> authenticateSimple({
     required String reason,
   }) async {
     try {
-      // ✅ Réinitialiser avant chaque tentative
       await resetAuthentication();
 
       final isAvailable = await isBiometricAvailable();

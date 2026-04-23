@@ -34,8 +34,8 @@ class LocationService {
 
   static LatLng? get lastKnown => _lastKnown;
 
-  /// Demande la permission et retourne la position réelle du téléphone.
-  /// Retourne une position par défaut en cas d'échec (fallback pour développement).
+  // Demande la permission et retourne la position réelle du téléphone.
+  // Retourne une position par défaut en cas d'échec (fallback pour développement).
   static Future<LocationResult> getCurrentLocation() async {
     // 1. Vérifier si le service de localisation est activé
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -131,7 +131,7 @@ class LocationService {
     }
   }
 
-  /// Démarre un stream de position en continu (pour le suivi en livraison).
+  // Démarre un stream de position en continu (pour le suivi en livraison).
   static void startTracking({
     required void Function(LatLng) onPosition,
     int distanceFilterM = 20,
@@ -149,20 +149,20 @@ class LocationService {
     });
   }
 
-  /// Arrête le tracking.
+  // Arrête le tracking.
   static void stopTracking() {
     _sub?.cancel();
     _sub = null;
   }
 
-  /// Vérifie si la permission est accordée (sans la demander).
+  // Vérifie si la permission est accordée (sans la demander).
   static Future<bool> hasPermission() async {
     final perm = await Geolocator.checkPermission();
     return perm == LocationPermission.whileInUse ||
         perm == LocationPermission.always;
   }
 
-  /// Force l'utilisation de la position par défaut (pour tester sans GPS)
+  // Force l'utilisation de la position par défaut (pour tester sans GPS)
   static void setDefaultPosition() {
     _lastKnown = _defaultPosition;
     print('📍 Position forcée à Antananarivo : ${_defaultPosition.lat}, ${_defaultPosition.lng}');

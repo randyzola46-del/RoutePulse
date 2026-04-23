@@ -11,8 +11,7 @@ import '../models/livraison.dart';
 import '../models/vehicule.dart';
 import '../models/preuve_livraison.dart';
 
-/// Version chiffrée du DatabaseService
-/// Toutes les données sensibles sont chiffrées avant insertion
+//Toutes les données sensibles sont chiffrées avant insertion
 class EncryptedDatabaseService {
   static final EncryptedDatabaseService _instance = EncryptedDatabaseService._internal();
   factory EncryptedDatabaseService() => _instance;

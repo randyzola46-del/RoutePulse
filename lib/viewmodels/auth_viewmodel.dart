@@ -2,7 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
-import '../services/app_database_service.dart';  // ✅ CHANGÉ
+import '../services/app_database_service.dart';
 import 'livraisons_viewmodel.dart';
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
@@ -52,7 +52,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
     if (isLoggedIn) {
       final user = await _authService.getCurrentUser();
       if (user != null) {
-        // ✅ Utilisation de AppDatabaseService
+        //Utilisation de AppDatabaseService
         AppDatabaseService().setCurrentUserId(user.id);
         state = state.copyWith(
           status: AuthStatus.authenticated,
@@ -70,7 +70,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
     try {
       final user = await _authService.login(email, password);
       if (user != null) {
-        // ✅ Utilisation de AppDatabaseService
+        //Utilisation de AppDatabaseService
         await AppDatabaseService().resetDatabase();
         AppDatabaseService().setCurrentUserId(user.id);
 
@@ -112,7 +112,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
         phone: phone,
       );
       if (user != null) {
-        // ✅ Utilisation de AppDatabaseService
+        //Utilisation de AppDatabaseService
         AppDatabaseService().setCurrentUserId(user.id);
 
         if (_ref != null) {
@@ -136,7 +136,7 @@ class AuthViewModel extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    // ✅ Utilisation de AppDatabaseService
+    //Utilisation de AppDatabaseService
     await AppDatabaseService().resetDatabase();
     await _authService.logout();
     AppDatabaseService().clearCurrentUser();

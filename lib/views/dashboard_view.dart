@@ -7,7 +7,7 @@ import '../theme/app_theme.dart';
 import '../viewmodels/livraisons_viewmodel.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../widgets/dashboard_header.dart';
-import '../widgets/dashboard_carousel.dart';  // ✅ NOUVEAU
+import '../widgets/dashboard_carousel.dart';
 import '../widgets/dashboard_delivery_tile.dart';
 import '../widgets/dashboard_empty_state.dart';
 import '../widgets/livraison_form_sheet.dart' hide statutColor;
@@ -43,7 +43,7 @@ class DashboardView extends ConsumerWidget {
           ),
         ),
 
-        // ✅ NOUVEAU : Carrousel de cartes (remplace la grille KPI)
+        //Carrousel de cartes
         const SliverPadding(
           padding: EdgeInsets.symmetric(vertical: 16),
           sliver: SliverToBoxAdapter(
@@ -101,8 +101,6 @@ class DashboardView extends ConsumerWidget {
     );
   }
 }
-
-// ... (le reste du code reste inchangé)
 
 class _SectionHeader extends StatelessWidget {
   final VoidCallback? onVoirTout;

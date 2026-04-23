@@ -48,7 +48,6 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('pw_${newUser.id}', password);
-    // ✅ AJOUT : Sauvegarder aussi pour la biométrie
     await prefs.setString('user_${newUser.id}_password', password);
 
     users.add(newUser);
@@ -72,14 +71,14 @@ class AuthService {
       throw Exception('Email ou mot de passe incorrect');
     }
 
-    // ✅ AJOUT : Sauvegarder le mot de passe pour la biométrie
+    //Sauvegarder le mot de passe pour la biométrie
     await prefs.setString('user_${user.id}_password', password);
 
     await _saveSession(user);
     return user;
   }
 
-  /// ✅ NOUVEAU : Récupérer le mot de passe d'un utilisateur
+  //Récupérer le mot de passe d'un utilisateur
   Future<String?> getUserPassword(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('user_${userId}_password');

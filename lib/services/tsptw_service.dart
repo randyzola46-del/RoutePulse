@@ -100,7 +100,7 @@ class TsptwService {
     return 0.0;
   }
 
-  /// Phase 1 : Nearest Neighbor avec score combiné distance + créneau
+  // Phase 1 : Nearest Neighbor avec score combiné distance + créneau
   static List<int> _nearestNeighbor(
       List<StopTSPTW> stops,
       LatLng origin,
@@ -150,7 +150,7 @@ class TsptwService {
     return tour;
   }
 
-  /// Phase 2 : 2-opt local search améliorée
+  // Phase 2 : 2-opt local search améliorée
   static List<int> _twoOpt(List<int> tour, List<StopTSPTW> stops, LatLng origin) {
     if (tour.length < 3) return tour;
 
@@ -206,7 +206,7 @@ class TsptwService {
     return best;
   }
 
-  /// Évaluation d'un ordre de tournée
+  // Évaluation d'un ordre de tournée
   static RouteResult _evaluate(
       List<int> order,
       List<StopTSPTW> stops,
@@ -258,7 +258,7 @@ class TsptwService {
     );
   }
 
-  /// Point d'entrée principal : optimise la tournée
+  // Point d'entrée principal : optimise la tournée
   static RouteResult optimize({
     required List<StopTSPTW> stops,
     required LatLng origin,
@@ -288,34 +288,24 @@ class TsptwService {
     return result;
   }
 
-  /// ✅ CORRECTION : Parse un créneau string avec gestion de multiples formats
-  /// Formats supportés :
-  /// - "08h–10h" ou "08h-10h"
-  /// - "08:00–10:00" ou "08:00-10:00"
-  /// - "08:00 - 10:00" (avec espaces)
-  /// - "8h00–18h00" etc.
+  //Formats supportés :
   static (int, int) parseCreneau(String creneau) {
     try {
       String clean = creneau.trim();
 
-      // Remplacer tous les types de tirets par un tiret standard
       clean = clean.replaceAll('–', '-');
       clean = clean.replaceAll('—', '-');
       clean = clean.replaceAll('−', '-');
 
-      // Remplacer 'h' par ':' (pour les formats "08h00" → "08:00")
-      // Gère "08h", "08h00", "8h", "8h00"
+
       if (clean.contains('h')) {
         final hIndex = clean.indexOf('h');
         if (hIndex >= 0) {
-          // Vérifier si après le 'h' il y a des chiffres (minutes)
           String beforeH = clean.substring(0, hIndex);
           String afterH = '';
           if (hIndex + 1 < clean.length) {
             afterH = clean.substring(hIndex + 1);
           }
-
-          // Extraire les minutes (les chiffres qui suivent 'h')
           String minutes = '';
           for (int i = 0; i < afterH.length; i++) {
             final char = afterH[i];
@@ -326,7 +316,6 @@ class TsptwService {
             }
           }
 
-          // Formatter l'heure: HH:MM
           String hourStr = beforeH;
           if (hourStr.length == 1) hourStr = '0$hourStr';
 

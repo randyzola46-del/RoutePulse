@@ -117,17 +117,17 @@ class CarteViewModel extends StateNotifier<CarteState> {
   final Ref _ref;
   static const double _maxDistanceFromOriginKm = 50.0;
 
-  // ✅ Subscription pour écouter les changements de livraisons
+  //Subscription pour écouter les changements de livraisons
   late final ProviderSubscription _livraisonsSubscription;
 
-  // Flag pour éviter les optimisations multiples en rafale
+  //Flag pour éviter les optimisations multiples en rafale
   bool _isOptimizing = false;
   Timer? _debounceTimer;
 
   CarteViewModel(this._ref) : super(const CarteState()) {
     _init();
 
-    // ✅ Écouter les changements dans les livraisons
+    //Écouter les changements dans les livraisons
     _livraisonsSubscription = _ref.listen(
       livraisonsViewModelProvider,
           (previous, next) {
@@ -150,7 +150,6 @@ class CarteViewModel extends StateNotifier<CarteState> {
     state = state.copyWith(allLivraisons: allLivraisons);
   }
 
-  // ── ✅ NOUVEAU : Réaction aux changements de livraisons ────────────────────
 
   Future<void> _onLivraisonsChanged(
       LivraisonsState? previous,
@@ -208,9 +207,6 @@ class CarteViewModel extends StateNotifier<CarteState> {
   }
 
   // ── Géocodage réel des adresses avec validation ───────────────────────────
-
-  /// Convertit une Livraison en StopTSPTW avec coordonnées réelles (Nominatim)
-  /// Retourne null si l'adresse est invalide ou trop éloignée
   Future<StopTSPTW?> _geocodeLivraison(
       Livraison l,
       void Function(String addr) onProgress,
@@ -227,7 +223,7 @@ class CarteViewModel extends StateNotifier<CarteState> {
       return null;
     }
 
-    // ✅ Vérifier la cohérence géographique (éviter les bonds aberrants)
+    //Vérifier la cohérence géographique (éviter les bonds aberrants)
     if (origin != null) {
       final distanceToOrigin = TsptwService.haversine(origin, pos);
       if (distanceToOrigin > _maxDistanceFromOriginKm) {

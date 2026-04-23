@@ -68,7 +68,7 @@ class _DashboardCarouselState extends ConsumerState<DashboardCarousel> {
       svgHeight: 130,
       svgOffsetX: -40,
       svgOffsetY: 0,
-      navigationTab: 4, // Index de l'onglet Gestion
+      navigationTab: 4,
     ),
   ];
 
@@ -101,7 +101,6 @@ class _DashboardCarouselState extends ConsumerState<DashboardCarousel> {
     // Utiliser le NavigationProvider pour changer d'onglet
     ref.read(navigationProvider.notifier).setTab(item.navigationTab);
 
-    // Optionnel: Afficher un snackbar de confirmation
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(

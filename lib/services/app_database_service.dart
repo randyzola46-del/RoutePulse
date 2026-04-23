@@ -8,8 +8,8 @@ import 'database_service.dart';
 import 'encrypted_database_service.dart';
 import 'encryption_service.dart';
 
-/// Service de base de données unifié
-/// Utilise le chiffrement si disponible, sinon fallback vers non chiffré
+// Service de base de données unifié
+// Utilise le chiffrement si disponible, sinon fallback vers non chiffré
 class AppDatabaseService {
   static final AppDatabaseService _instance = AppDatabaseService._internal();
   factory AppDatabaseService() => _instance;

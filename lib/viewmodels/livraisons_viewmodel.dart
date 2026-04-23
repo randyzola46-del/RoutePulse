@@ -4,7 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/client.dart';
 import '../models/livraison.dart';
 import '../models/vehicule.dart';
-import '../services/app_database_service.dart';  // ✅ CHANGÉ
+import '../services/app_database_service.dart';
 import 'clients_viewmodel.dart';
 import 'vehicules_viewmodel.dart';
 
@@ -88,7 +88,7 @@ class LivraisonsState {
 
 class LivraisonsViewModel extends StateNotifier<LivraisonsState> {
   final Ref _ref;
-  final AppDatabaseService _db = AppDatabaseService();  // ✅ CHANGÉ
+  final AppDatabaseService _db = AppDatabaseService();
   final Uuid _uuid = const Uuid();
   final Map<String, List<String>> _livraisonsEnCoursParVehicule = {};
 
